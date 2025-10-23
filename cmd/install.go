@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
 
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/santoshkpatro/unbit/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -23,9 +26,45 @@ func install() error {
 		log.Fatalf("❌ failed to connect to postgres: %v", err)
 	}
 	defer db.Close()
+	fmt.Println("🚀 Running installation setup...")
 
-	// 1. Setup initial schema table in the schema_migrations
-	// 2. Setup setting table with some seed data
+	if err := createSettingsTable(ctx, db); err != nil {
+		return fmt.Errorf("failed to create settings table: %w", err)
+	}
 
+	if err := insertDefaultSettings(ctx, db); err != nil {
+		return fmt.Errorf("failed to insert default settings: %w", err)
+	}
+
+	fmt.Println("✅ Installation complete!")
 	return nil
+}
+
+func createSettingsTable(ctx context.Context, db *sqlx.DB) error {
+	query := `
+		CREATE TABLE IF NOT EXISTS setting (
+			org_name TEXT NOT NULL DEFAULT '',
+			org_url TEXT NOT NULL DEFAULT '',
+			support_email TEXT NOT NULL DEFAULT '',
+			migration_version TEXT NOT NULL DEFAULT 'v0',
+			allow_invite BOOLEAN NOT NULL DEFAULT true,
+			allow_login BOOLEAN NOT NULL DEFAULT true,
+			is_maintenance_on BOOLEAN NOT NULL DEFAULT false,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		);
+	`
+	_, err := db.ExecContext(ctx, query)
+
+	return err
+}
+
+func insertDefaultSettings(ctx context.Context, db *sqlx.DB) error {
+	query := `
+	INSERT INTO setting (org_name, org_url, support_email)
+	SELECT 'My Org', 'https://unbit.app', 'support@unbit.com'
+	WHERE NOT EXISTS (SELECT 1 FROM setting);
+	`
+	_, err := db.ExecContext(ctx, query)
+	return err
 }
