@@ -14,4 +14,7 @@ type HandlerContext struct {
 func (hc *HandlerContext) RegisterAPIRoutes(g *echo.Group) {
 	g.POST("/auth/login", hc.LoginHandler)
 	g.GET("/auth/profile", hc.ProfileHandler)
+
+	// Injest Routes
+	g.POST("/injest/capture", hc.InjestCaptureHandler)
 }

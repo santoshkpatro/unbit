@@ -1,4 +1,4 @@
-package injest
+package handlers
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func (ic *InjestContext) Capture(c echo.Context) error {
+func (hc *HandlerContext) InjestCaptureHandler(c echo.Context) error {
 	unbitAuth := c.Request().Header.Get("X-Unbit-Auth")
 	fmt.Println("Auth", unbitAuth)
 

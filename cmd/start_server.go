@@ -12,7 +12,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/santoshkpatro/unbit/internal/config"
 	"github.com/santoshkpatro/unbit/internal/handlers"
-	"github.com/santoshkpatro/unbit/internal/injest"
 	"github.com/spf13/cobra"
 )
 
@@ -50,12 +49,6 @@ func startServer() error {
 	}
 	apiRoutes := e.Group("/api")
 	hc.RegisterAPIRoutes(apiRoutes)
-
-	ic := &injest.InjestContext{
-		RDB: rdb,
-	}
-	injestRoutes := e.Group("/injest")
-	ic.RegisterInjestRoutes(injestRoutes)
 
 	go func() {
 		if err := e.Start(":" + config.Env.Port); err != nil {
