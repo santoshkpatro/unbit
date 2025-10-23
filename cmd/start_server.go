@@ -28,6 +28,7 @@ func startServer() error {
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{Root: "dist", HTML5: true}))
 
 	ctx := context.Background()
 
