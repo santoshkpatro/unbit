@@ -46,7 +46,7 @@ func createSettingsTable(ctx context.Context, db *sqlx.DB) error {
 			org_name TEXT NOT NULL DEFAULT '',
 			org_url TEXT NOT NULL DEFAULT '',
 			support_email TEXT NOT NULL DEFAULT '',
-			migration_version TEXT NOT NULL DEFAULT 'v0',
+			schema_migrations TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
 			allow_invite BOOLEAN NOT NULL DEFAULT true,
 			allow_login BOOLEAN NOT NULL DEFAULT true,
 			is_maintenance_on BOOLEAN NOT NULL DEFAULT false,
