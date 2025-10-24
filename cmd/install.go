@@ -80,6 +80,10 @@ func seedSettings(ctx context.Context, db *sqlx.DB) error {
 		Key   string
 		Value string // JSON literal
 	}{
+
+		// Current Migration
+		{"migrationVersion", `0`},
+
 		// Organization settings
 		{"org.site_name", `"Unbit"`},
 		{"org.root_url", `"https://unbit.app"`},
