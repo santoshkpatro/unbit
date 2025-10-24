@@ -23,7 +23,8 @@ func init() {
 				);
 			`)
 			if err != nil {
-				return fmt.Errorf("creating users table: %w", err)
+				return fmt.Errorf("failed to apply migration: %w", err)
+
 			}
 			return nil
 		},
@@ -32,7 +33,7 @@ func init() {
 				DROP TABLE IF EXISTS users;
 			`)
 			if err != nil {
-				return fmt.Errorf("dropping users table: %w", err)
+				return fmt.Errorf("failed to revert migration version: %w", err)
 			}
 			return nil
 		},
