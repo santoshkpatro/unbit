@@ -11,7 +11,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/santoshkpatro/unbit/internal/config"
-	"github.com/santoshkpatro/unbit/internal/handlers"
 	"github.com/spf13/cobra"
 )
 
@@ -38,18 +37,13 @@ func startServer() error {
 	}
 	defer db.Close()
 
-	rdb, err := config.NewRedisConnection(ctx)
+	cache, err := config.NewRedisConnection(ctx)
 	if err != nil {
 		log.Fatalf("❌ failed to connect to redis: %v", err)
 	}
-	defer rdb.Close()
+	defer cache.Close()
 
-	hc := &handlers.HandlerContext{
-		DB:  db,
-		RDB: rdb,
-	}
-	apiRoutes := e.Group("/api")
-	hc.RegisterAPIRoutes(apiRoutes)
+	config.RegisterRoutes(e, db, cache)
 
 	go func() {
 		if err := e.Start(":" + config.Env.Port); err != nil {
