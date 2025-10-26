@@ -9,17 +9,21 @@ import (
 
 func init() {
 	RegisterMigration(Migration{
-		Version: 3,
+		Version: 1,
 		Up: func(ctx context.Context, tx *sqlx.Tx) error {
 			_, err := tx.ExecContext(ctx, `
-				CREATE TABLE IF NOT EXISTS applications (
+				CREATE TABLE IF NOT EXISTS users (
 					id TEXT PRIMARY KEY,
-					name TEXT NOT NULL UNIQUE,
-					owner_id TEXT NOT NULL,
-					created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-					updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-					FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
-				)
+					email TEXT UNIQUE NOT NULL,
+					first_name TEXT,
+					last_name TEXT,
+					password_hash TEXT,
+					salt TEXT,
+					is_active BOOLEAN DEFAULT TRUE,
+					is_admin BOOLEAN DEFAULT FALSE,
+					created_at TIMESTAMPTZ DEFAULT NOW(),
+					updated_at TIMESTAMPTZ DEFAULT NOW()
+				);
 			`)
 			if err != nil {
 				return fmt.Errorf("failed to apply migration: %w", err)
@@ -29,7 +33,7 @@ func init() {
 		},
 		Down: func(ctx context.Context, tx *sqlx.Tx) error {
 			_, err := tx.ExecContext(ctx, `
-				DROP TABLE IF EXISTS applications;
+				DROP TABLE IF EXISTS users;
 			`)
 			if err != nil {
 				return fmt.Errorf("failed to revert migration version: %w", err)

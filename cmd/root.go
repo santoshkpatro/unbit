@@ -18,4 +18,5 @@ func init() {
 	rootCmd.AddCommand(startServerCmd)
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(dbMigrateCmd)
+	rootCmd.AddCommand(addSuperuserCmd)
 }

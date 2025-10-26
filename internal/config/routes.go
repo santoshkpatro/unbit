@@ -16,6 +16,6 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	api := e.Group("/api")
 
 	api.POST("/auth/login", view.LoginUser)
-	api.GET("/auth/status", view.AuthenticationStatus)
-	api.GET("/auth/logout", view.LogoutUser)
+	// api.GET("/auth/status", view.AuthenticationStatus)
+	// api.GET("/auth/logout", view.LogoutUser)
 }

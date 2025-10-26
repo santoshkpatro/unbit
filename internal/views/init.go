@@ -13,16 +13,13 @@ type ViewContext struct {
 	Cache *redis.Client
 }
 
-func (v *ViewContext) RespondOK(c echo.Context, data interface{}, msg *string) error {
-	// if data is nil, make it an empty object instead of null
+// RespondOK sends a 200 JSON response. Pass nil for data to get an empty object.
+// Pass "" for message if you don't want a message.
+func (v *ViewContext) RespondOK(c echo.Context, data interface{}, message string) error {
 	if data == nil {
 		data = map[string]interface{}{}
 	}
 
-	var message string
-	if msg != nil {
-		message = *msg
-	}
 	response := map[string]interface{}{
 		"success": true,
 		"message": message,
@@ -31,29 +28,20 @@ func (v *ViewContext) RespondOK(c echo.Context, data interface{}, msg *string) e
 	return c.JSON(http.StatusOK, response)
 }
 
-func (v *ViewContext) RespondFail(c echo.Context, code *int, msg *string, err interface{}) error {
-	status := http.StatusBadRequest
-	if code != nil {
-		status = *code
+// RespondFail sends an error JSON response. Use status=0 to default to 400.
+// Pass nil for err to get an empty object. Pass "" for message if not needed.
+func (v *ViewContext) RespondFail(c echo.Context, status int, message string, err interface{}) error {
+	if status == 0 {
+		status = http.StatusBadRequest
 	}
-
-	message := ""
-	if msg != nil {
-		message = *msg
-	}
-
-	var errVal interface{}
-	if err != nil {
-		errVal = err
-	} else {
-		errVal = map[string]interface{}{}
+	if err == nil {
+		err = map[string]interface{}{}
 	}
 
 	response := map[string]interface{}{
 		"success": false,
 		"message": message,
-		"error":   errVal,
+		"error":   err,
 	}
-
 	return c.JSON(status, response)
 }

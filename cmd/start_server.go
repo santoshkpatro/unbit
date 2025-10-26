@@ -8,11 +8,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/santoshkpatro/unbit/internal/config"
 	"github.com/spf13/cobra"
 )
+
+type CustomValidator struct {
+	validator *validator.Validate
+}
 
 var startServerCmd = &cobra.Command{
 	Use:   "start_server",
@@ -28,6 +33,9 @@ func startServer() error {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{Root: "dist", HTML5: true}))
+
+	// Set up custom validator for Request validation
+	e.Validator = &CustomValidator{validator: validator.New()}
 
 	ctx := context.Background()
 
@@ -68,4 +76,8 @@ func startServer() error {
 	log.Println("✅ Server exited properly")
 
 	return nil
+}
+
+func (cv *CustomValidator) Validate(i interface{}) error {
+	return cv.validator.Struct(i)
 }
