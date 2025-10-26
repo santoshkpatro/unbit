@@ -3,7 +3,10 @@ package views
 import (
 	"net/http"
 
+	"github.com/gorilla/sessions"
+	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/santoshkpatro/unbit/internal/models"
 )
 
 type loginData struct {
@@ -31,5 +34,36 @@ func (v *ViewContext) LoginUser(c echo.Context) error {
 		return v.RespondFail(c, http.StatusUnauthorized, "Invalid email or password", nil)
 	}
 
-	return c.String(200, "Ok")
+	var user models.User
+	err = v.DB.Get(&user, "SELECT id, email, first_name, last_name, is_admin FROM users WHERE email=$1", data.Email)
+	if err != nil {
+		return v.RespondFail(c, http.StatusInternalServerError, "Database error", err.Error())
+	}
+
+	sess, err := session.Get("session", c)
+	if err != nil {
+		return v.RespondFail(c, http.StatusInternalServerError, "Session error", err.Error())
+	}
+	sess.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 7,
+		HttpOnly: true,
+	}
+	sess.Values["loggedInUser"] = user.ID
+	if err := sess.Save(c.Request(), c.Response()); err != nil {
+		return v.RespondFail(c, http.StatusInternalServerError, "Failed to save session", err.Error())
+	}
+
+	return v.RespondOK(c, user, "Login successful")
+}
+
+func (v *ViewContext) Profile(c echo.Context) error {
+	userID, _ := v.CheckAuthentication(c)
+	var user models.User
+	err := v.DB.Get(&user, "SELECT id, email, first_name, last_name, is_admin FROM users WHERE id=$1", userID)
+	if err != nil {
+		return v.RespondFail(c, http.StatusInternalServerError, "Database error", err.Error())
+	}
+
+	return v.RespondOK(c, user, "User profile fetched successfully")
 }

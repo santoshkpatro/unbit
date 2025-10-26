@@ -1,9 +1,11 @@
 package views
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 )
@@ -44,4 +46,24 @@ func (v *ViewContext) RespondFail(c echo.Context, status int, message string, er
 		"error":   err,
 	}
 	return c.JSON(status, response)
+}
+
+// CheckAuthentication ensures the user is logged in.
+// If the session is valid, returns (userID, nil).
+// Otherwise, sends a 401 JSON error and returns ("", error).
+func (v *ViewContext) CheckAuthentication(c echo.Context) (string, error) {
+	sess, err := session.Get("session", c)
+	if err != nil {
+		// session middleware misconfigured or cookie invalid
+		_ = v.RespondFail(c, http.StatusUnauthorized, "Unauthorized", "invalid session")
+		return "", err
+	}
+
+	userID, ok := sess.Values["loggedInUser"].(string)
+	if !ok || userID == "" {
+		_ = v.RespondFail(c, http.StatusUnauthorized, "Unauthorized", "user not logged in")
+		return "", errors.New("user not logged in")
+	}
+
+	return userID, nil
 }
