@@ -20,4 +20,6 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 
 	api.POST("/auth/login", view.LoginUser)
 	api.GET("/auth/profile", view.Profile)
+
+	api.POST("/projects", view.ProjectCreateView)
 }

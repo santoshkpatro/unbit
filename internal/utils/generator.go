@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/oklog/ulid/v2"
 )
@@ -26,5 +27,5 @@ func ComparePassword(password string, salt string, hash string) bool {
 }
 
 func GenerateID(prefix string) string {
-	return fmt.Sprintf("%s_%s", prefix, ulid.Make())
+	return fmt.Sprintf("%s_%s", prefix, strings.ToLower(ulid.Make().String()))
 }
