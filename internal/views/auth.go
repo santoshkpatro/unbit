@@ -1,8 +1,6 @@
 package views
 
 import (
-	"net/http"
-
 	"github.com/labstack/echo/v4"
 )
 
@@ -12,5 +10,9 @@ func (v *ViewContext) LoginUser(c echo.Context) error {
 }
 
 func (v *ViewContext) AuthenticationStatus(c echo.Context) error {
-	return c.String(http.StatusOK, "Working Good!")
+	return v.RespondOK(c, nil, nil)
+}
+
+func (v *ViewContext) LogoutUser(c echo.Context) error {
+	return v.RespondFail(c, nil, nil, nil)
 }
