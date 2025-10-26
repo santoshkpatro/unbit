@@ -22,4 +22,6 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	api.GET("/auth/profile", view.Profile)
 
 	api.POST("/projects", view.ProjectCreateView)
+	api.GET("/projects", view.ProjectListView)
+	api.GET("/projects/:projectId", view.ProjectDetailView)
 }
