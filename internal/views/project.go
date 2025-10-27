@@ -1,14 +1,46 @@
 package views
 
 import (
+	"database/sql"
+	"encoding/json"
+
 	"github.com/labstack/echo/v4"
-	"github.com/santoshkpatro/unbit/internal/models"
 	"github.com/santoshkpatro/unbit/internal/utils"
 )
 
 type ProjectCreateData struct {
 	Name        string `json:"name" validate:"required"`
 	Description string `json:"description"`
+}
+
+type ProjectResponse struct {
+	ID          string `json:"id" db:"id"`
+	Name        string `json:"name" db:"name"`
+	Description string `json:"description" db:"description"`
+	DSNToken    string `json:"dsnToken" db:"dsn_token"`
+	CreatedAt   string `json:"createdAt" db:"created_at"`
+}
+
+type User struct {
+	ID        string `json:"id" db:"id"`
+	Email     string `json:"email" db:"email"`
+	FirstName string `json:"firstName" db:"first_name"`
+	LastName  string `json:"lastName" db:"last_name"`
+}
+
+type Member struct {
+	UserID string `json:"userId" db:"user_id"`
+	Role   string `json:"role" db:"role"`
+	User   User   `json:"user" db:"-"`
+}
+
+type ProjectDetailResponse struct {
+	ID          string   `json:"id" db:"id"`
+	Name        string   `json:"name" db:"name"`
+	Description string   `json:"description" db:"description"`
+	DSNToken    string   `json:"dsnToken" db:"dsn_token"`
+	CreatedAt   string   `json:"createdAt" db:"created_at"`
+	Members     []Member `json:"members" db:"-"`
 }
 
 func (v *ViewContext) ProjectCreateView(c echo.Context) error {
@@ -31,8 +63,8 @@ func (v *ViewContext) ProjectCreateView(c echo.Context) error {
 		return v.RespondFail(c, 500, "Database error", err.Error())
 	}
 
-	var newProject models.Project
-	err := v.DB.Get(&newProject, "SELECT id, name, description, dsn_token, created_at FROM projects WHERE id=$1", newProjectID)
+	var newProject ProjectResponse
+	err := v.DB.Get(&newProject, "SELECT id, name, description, dsn_token, created_at FROM projects WHERE id = $1", newProjectID)
 	if err != nil {
 		return v.RespondFail(c, 500, "Database error", err.Error())
 	}
@@ -43,7 +75,7 @@ func (v *ViewContext) ProjectCreateView(c echo.Context) error {
 func (v *ViewContext) ProjectListView(c echo.Context) error {
 	userId, _ := v.CheckAuthentication(c)
 
-	var projects []models.Project
+	var projects []ProjectResponse
 	err := v.DB.Select(&projects, `
 		SELECT p.id, p.name, p.description, p.dsn_token, p.created_at
 		FROM projects p
@@ -61,42 +93,77 @@ func (v *ViewContext) ProjectDetailView(c echo.Context) error {
 	userId, _ := v.CheckAuthentication(c)
 	projectId := c.Param("projectId")
 
-	var project models.Project
-	err := v.DB.Get(&project, `
-		SELECT p.id, p.name, p.description, p.dsn_token, p.created_at
-		FROM projects p
-		JOIN project_members pm ON p.id = pm.project_id
-		WHERE pm.user_id = $1 AND p.id = $2
-	`, userId, projectId)
+	var userRole string
+	err := v.DB.Get(&userRole, "SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2", projectId, userId)
 	if err != nil {
-		return v.RespondFail(c, 404, "Project not found or access denied", err.Error())
-	}
-
-	var members []models.ProjectMember
-	err = v.DB.Select(&members, `
-		SELECT 
-			pm.id, 
-			pm.project_id, 
-			pm.user_id, 
-			pm.role, 
-			pm.joined_at, 
-			pm.created_at,
-			json_build_object(
-				'id', u.id,
-				'email', u.email,
-				'first_name', u.first_name,
-				'last_name', u.last_name,
-				'is_admin', u.is_admin
-			) AS user
-		FROM project_members pm
-		JOIN users u ON u.id = pm.user_id
-		WHERE pm.project_id = $1
-		ORDER BY pm.joined_at ASC
-	`, projectId)
-	if err != nil {
+		if err == sql.ErrNoRows {
+			return v.RespondFail(c, 403, "Forbidden", "user is not a member of the project")
+		}
 		return v.RespondFail(c, 500, "Database error", err.Error())
 	}
-	project.Members = members
 
-	return v.RespondOK(c, project, "Project details fetched")
+	// members: array of { userId, role, user: { id, email, firstName, lastName } }
+	const q = `
+	SELECT
+		p.id,
+		p.name,
+		p.description,
+		p.dsn_token,
+		p.created_at,
+		COALESCE(
+		  json_agg(
+			json_build_object(
+			  'userId', pm.user_id,
+			  'role', pm.role,
+			  'user', json_build_object(
+				'id', u.id,
+				'email', u.email,
+				'firstName', u.first_name,
+				'lastName', u.last_name
+			  )
+			)
+		  ) FILTER (WHERE pm.user_id IS NOT NULL),
+		  '[]'
+		) AS members
+	FROM projects p
+	JOIN project_members pm ON p.id = pm.project_id
+	LEFT JOIN users u ON u.id = pm.user_id
+	WHERE p.id = $1
+	GROUP BY p.id
+	`
+
+	// intermediate row to receive the DB result
+	type projectRow struct {
+		ID          string          `db:"id"`
+		Name        string          `db:"name"`
+		Description string          `db:"description"`
+		DSNToken    string          `db:"dsn_token"`
+		CreatedAt   string          `db:"created_at"`
+		MembersJSON json.RawMessage `db:"members"`
+	}
+
+	var row projectRow
+	err = v.DB.Get(&row, q, projectId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return v.RespondFail(c, 404, "Not found", "project not found")
+		}
+		return v.RespondFail(c, 500, "Database error", err.Error())
+	}
+
+	var members []Member
+	if err := json.Unmarshal(row.MembersJSON, &members); err != nil {
+		return v.RespondFail(c, 500, "JSON unmarshal error", err.Error())
+	}
+
+	resp := ProjectDetailResponse{
+		ID:          row.ID,
+		Name:        row.Name,
+		Description: row.Description,
+		DSNToken:    row.DSNToken,
+		CreatedAt:   row.CreatedAt,
+		Members:     members,
+	}
+
+	return v.RespondOK(c, resp, "Project details fetched")
 }
