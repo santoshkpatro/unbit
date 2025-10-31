@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 	"github.com/santoshkpatro/unbit/internal/apps/auth"
+	"github.com/santoshkpatro/unbit/internal/apps/projects"
 )
 
 func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
@@ -24,6 +25,13 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	}
 	api.POST("/auth/login", authContext.LoginUser)
 	api.GET("/auth/profile", authContext.Profile)
+
+	prjectContext := &projects.ProjectContext{
+		DB:    db,
+		Cache: cache,
+	}
+
+	api.GET("/projects", prjectContext.ProjectListView)
 
 	// api.POST("/auth/login", view.LoginUser)
 	// api.GET("/auth/profile", view.Profile)
