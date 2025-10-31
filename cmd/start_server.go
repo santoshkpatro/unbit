@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/santoshkpatro/unbit/internal/config"
+	"github.com/santoshkpatro/unbit/internal/worker"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +31,7 @@ var startServerCmd = &cobra.Command{
 func startServer() error {
 	e := echo.New()
 
-	e.Use(middleware.Logger())
+	// e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{Root: "dist", HTML5: true}))
 
@@ -53,10 +54,17 @@ func startServer() error {
 
 	config.RegisterRoutes(e, db, cache)
 
+	// Start server
 	go func() {
 		if err := e.Start(":" + config.Env.Port); err != nil {
 			log.Printf("server stopped: %v", err)
 		}
+	}()
+
+	// Start Worker
+	go func() {
+		queueName := "issue_events"
+		worker.StartWorker(cache, db, queueName)
 	}()
 
 	// Wait for Ctrl+C or SIGTERM

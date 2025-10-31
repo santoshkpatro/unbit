@@ -7,18 +7,22 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 	"github.com/santoshkpatro/unbit/internal/apps/auth"
+	"github.com/santoshkpatro/unbit/internal/apps/ingest"
 	"github.com/santoshkpatro/unbit/internal/apps/projects"
 )
 
 func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
-	// view := &views.ViewContext{
-	// 	DB:    db,
-	// 	Cache: cache,
-	// }
-
 	api := e.Group("/api")
 	api.Use(session.Middleware(sessions.NewCookieStore([]byte(Env.SecretKey))))
 
+	// Ingest routes
+	ingestContext := &ingest.IngestContext{
+		DB:    db,
+		Cache: cache,
+	}
+	api.POST("/ingest/event", ingestContext.NewEvent)
+
+	// Auth routes
 	authContext := &auth.AuthContext{
 		DB:    db,
 		Cache: cache,
@@ -26,17 +30,10 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	api.POST("/auth/login", authContext.LoginUser)
 	api.GET("/auth/profile", authContext.Profile)
 
-	prjectContext := &projects.ProjectContext{
+	// Project routes
+	projectContext := &projects.ProjectContext{
 		DB:    db,
 		Cache: cache,
 	}
-
-	api.GET("/projects", prjectContext.ProjectListView)
-
-	// api.POST("/auth/login", view.LoginUser)
-	// api.GET("/auth/profile", view.Profile)
-
-	// api.POST("/projects", view.ProjectCreateView)
-	// api.GET("/projects", view.ProjectListView)
-	// api.GET("/projects/:projectId", view.ProjectDetailView)
+	api.GET("/projects", projectContext.ProjectListView)
 }
