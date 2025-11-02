@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/sessions"
@@ -61,4 +64,38 @@ func (v *AuthContext) Profile(c echo.Context) error {
 	}
 
 	return utils.RespondOK(c, user, "User profile fetched successfully")
+}
+
+func (v *AuthContext) AuthStatus(c echo.Context) error {
+	sess, err := session.Get("session", c)
+	if err != nil {
+		return utils.RespondFail(c, http.StatusInternalServerError, "Session error", err.Error())
+	}
+
+	userID, ok := sess.Values["loggedInUser"]
+	if !ok || userID == nil {
+		return utils.RespondOK(c, map[string]interface{}{
+			"isLoggedIn":  false,
+			"userProfile": nil,
+		}, "")
+	}
+
+	id := fmt.Sprint(userID)
+
+	var user User
+	if err := v.DB.Get(&user, "SELECT * FROM users WHERE id = $1", id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return utils.RespondOK(c, map[string]interface{}{
+				"isLoggedIn":  false,
+				"userProfile": nil,
+			}, "User not found")
+		}
+		return utils.RespondFail(c, http.StatusInternalServerError, "Database error", err.Error())
+	}
+
+	// session valid and user found
+	return utils.RespondOK(c, map[string]interface{}{
+		"isLoggedIn":  true,
+		"userProfile": user,
+	}, "")
 }

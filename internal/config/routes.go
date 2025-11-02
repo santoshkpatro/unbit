@@ -37,6 +37,7 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	}
 	api.POST("/auth/login", authContext.LoginUser)
 	api.GET("/auth/profile", authContext.Profile)
+	api.GET("/auth/status", authContext.AuthStatus)
 
 	// Project routes
 	projectContext := &projects.ProjectContext{

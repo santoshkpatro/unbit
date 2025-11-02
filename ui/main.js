@@ -7,7 +7,10 @@ import { createNotivue } from 'notivue'
 import App from '@/App.vue'
 import router from '@/router'
 import { settingMetaAPI } from '@/api/setting'
+import { authStatusAPI } from '@/api/auth'
+
 import { useSettingStore } from '@/stores/setting'
+import { useAuthStore } from '@/stores/auth'
 
 const app = createApp(App)
 
@@ -22,9 +25,15 @@ app.use(
 
 async function bootstrap() {
   const metaData = await settingMetaAPI()
+  const authStatus = await authStatusAPI()
 
   const settingStore = useSettingStore()
   settingStore.setSetting(metaData)
+
+  const authStore = useAuthStore()
+  if (authStatus.isLoggedIn) {
+    authStore.setLoggedInUser(authStatus.userProfile)
+  }
 
   app.use(router)
   app.mount('#app')
