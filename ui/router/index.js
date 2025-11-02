@@ -1,20 +1,23 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import HomeView from '@/views/HomeView.vue'
+import { useSettingStore } from '@/stores/setting'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/install',
+      name: 'install',
+      component: () => import('@/views/InstallView.vue'),
+    },
+    {
       path: '/about',
       name: 'about',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue'),
+      component: () => import('@/views/AboutView.vue'),
     },
     {
       path: '',
-      component: () => import('@/views/HomeView.vue'),
+      component: HomeView,
       children: [
         {
           path: '',
@@ -34,6 +37,15 @@ const router = createRouter({
       ],
     },
   ],
+})
+
+router.beforeEach((to, from, next) => {
+  const settingStore = useSettingStore()
+  if (!settingStore.isInstalled && to.name !== 'install') {
+    return next({ name: 'install' })
+  }
+
+  return next()
 })
 
 export default router

@@ -9,11 +9,19 @@ import (
 	"github.com/santoshkpatro/unbit/internal/apps/auth"
 	"github.com/santoshkpatro/unbit/internal/apps/ingest"
 	"github.com/santoshkpatro/unbit/internal/apps/projects"
+	"github.com/santoshkpatro/unbit/internal/apps/setting"
 )
 
 func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	api := e.Group("/api")
 	api.Use(session.Middleware(sessions.NewCookieStore([]byte(Env.SecretKey))))
+
+	// Setting routes
+	settingContext := &setting.SettingContext{
+		DB:    db,
+		Cache: cache,
+	}
+	api.GET("/setting/meta", settingContext.SettingMeta)
 
 	// Ingest routes
 	ingestContext := &ingest.IngestContext{
