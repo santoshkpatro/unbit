@@ -20,5 +20,5 @@ func (v *ProjectContext) ProjectListView(c echo.Context) error {
 		return utils.RespondFail(c, http.StatusInternalServerError, "Failed to fetch projects", err)
 	}
 
-	return utils.RespondOK(c, projects, "Projects fetched successfully")
+	return utils.RespondOK(c, projects, "")
 }

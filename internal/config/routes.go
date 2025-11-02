@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/santoshkpatro/unbit/internal/apps/auth"
 	"github.com/santoshkpatro/unbit/internal/apps/ingest"
+	"github.com/santoshkpatro/unbit/internal/apps/issues"
 	"github.com/santoshkpatro/unbit/internal/apps/projects"
 	"github.com/santoshkpatro/unbit/internal/apps/setting"
 )
@@ -45,4 +46,11 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 		Cache: cache,
 	}
 	api.GET("/projects", projectContext.ProjectListView)
+
+	// Issues routes
+	issueContext := &issues.IssueContext{
+		DB:    db,
+		Cache: cache,
+	}
+	api.GET("/issues", issueContext.IssueList)
 }
