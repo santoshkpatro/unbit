@@ -63,7 +63,7 @@ func startServer() error {
 
 	// Start Worker
 	go func() {
-		queueName := "issue_events"
+		queueName := "issues"
 		worker.StartWorker(cache, db, queueName)
 	}()
 

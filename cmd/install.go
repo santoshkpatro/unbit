@@ -85,34 +85,34 @@ func seedSettings(ctx context.Context, db *sqlx.DB) error {
 		{"migrationVersion", `0`},
 
 		// Organization settings
-		{"org.site_name", `"Unbit"`},
-		{"org.root_url", `"https://unbit.app"`},
-		{"org.support_email", `"no-reply@unbit.app"`},
-		{"org.logo_url", `""`},
+		{"org.siteName", `"Unbit"`},
+		{"org.rootUrl", `"https://unbit.app"`},
+		{"org.supportEmail", `"no-reply@unbit.app"`},
+		{"org.logoUrl", `""`},
 		{"org.description", `"Next-generation collaboration platform"`},
 		{"org.timezone", `"UTC"`},
 
 		// Authentication settings
-		{"auth.allow_registration", `true`},
-		{"auth.require_email_verification", `true`},
-		{"auth.password_min_length", `8`},
-		{"auth.max_login_attempts", `5`},
+		{"auth.allowRegistration", `true`},
+		{"auth.requireEmailVerification", `true`},
+		{"auth.passwordMinLength", `8`},
+		{"auth.maxLoginAttempts", `5`},
 
 		// UI settings
 		{"ui.theme", `"light"`},
 		{"ui.language", `"en-US"`},
 
 		// Security settings
-		{"security.enable_2fa", `false`},
-		{"security.session_timeout_minutes", `30`},
-		{"security.allowed_ip_ranges", `[]`},
+		{"security.enable2fa", `false`},
+		{"security.sessionTimeoutMinutes", `30`},
+		{"security.allowedIPRanges", `[]`},
 
 		// Maintenance settings
-		{"system.maintenance_mode", `false`},
-		{"system.maintenance_message", `"System under maintenance. Please check back later."`},
+		{"system.maintenanceMode", `false`},
+		{"system.maintenanceMessage", `"System under maintenance. Please check back later."`},
 
 		// Miscellaneous
-		{"feature.invite_users", `true`},
+		{"feature.inviteUsers", `true`},
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)

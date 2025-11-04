@@ -8,3 +8,8 @@ type Project struct {
 	CreatedAt   string `db:"created_at" json:"createdAt"`
 	UpdatedAt   string `db:"updated_at" json:"-"`
 }
+
+type ProjectNew struct {
+	Name        string `json:"name" validate:"required"`
+	Description string `json:"description"`
+}

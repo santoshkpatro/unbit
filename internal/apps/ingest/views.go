@@ -11,7 +11,7 @@ import (
 )
 
 func (v *IngestContext) NewEvent(c echo.Context) error {
-	var queue = "issue_events"
+	var queue = "issues"
 	var event models.Event
 	if err := c.Bind(&event); err != nil {
 		utils.RespondFail(c, http.StatusBadRequest, "Failed", nil)

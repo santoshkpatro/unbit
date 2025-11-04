@@ -36,71 +36,57 @@ func StartWorker(cache *redis.Client, db *sqlx.DB, queue string) {
 }
 
 func handleEvent(db *sqlx.DB, dsnToken string, event models.Event) {
+	tx, err := db.Beginx()
+	if err != nil {
+		log.Println("begin tx:", err)
+		return
+	}
+	defer tx.Rollback() // no-op if Commit succeeds
+
 	fingerprint := ComputeFingerprint(event)
 
 	var projectId string
-	err := db.Get(&projectId, "SELECT id FROM projects WHERE dsn_token = $1", dsnToken)
-	if err != nil {
-		log.Println("❌ Error fetching project for DSN token:", err)
+	if err = tx.Get(&projectId, `SELECT id FROM projects WHERE dsn_token = $1`, dsnToken); err != nil {
+		log.Println("❌ project lookup:", err)
 		return
 	}
 
-	var issue models.Issue
-	err = db.Get(&issue, "SELECT * FROM issues WHERE project_id = $1 AND fingerprint = $2", projectId, fingerprint)
-	if err != nil {
-		// Issue does not exist, create a new one
-		summary := event.Message
-		issueID := utils.GenerateID("iss")
-		lastSeenAt := event.Timestamp
-
-		_, err = db.Exec(`
-			INSERT INTO issues (id, project_id, summary, fingerprint, last_seen_at, event_count, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, 1, NOW(), NOW())
-		`, issueID, projectId, summary, fingerprint, lastSeenAt)
-
-		if err != nil {
-			log.Println("❌ Error creating new issue:", err)
-			return
-		}
-
-		// Now let's insert event
-		_, err = db.Exec(`
-			INSERT INTO events (id, issue_id, message, level, timestamp, stacktrace, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, NOW())
-		`, utils.GenerateID("evt"), issueID, event.Message, event.Level, event.Timestamp, StackTraceToJSON(event.StackTrace))
-		if err != nil {
-			log.Println("❌ Error inserting event for new issue:", err)
-			return
-		}
-
-		log.Println("✅ Created new issue with ID:", issueID)
-	} else {
-		issueID := issue.ID
-		// Issue exists, update it
-		_, err = db.Exec(`
-			UPDATE issues
-			SET last_seen_at = $1, event_count = event_count + 1, updated_at = NOW()
-			WHERE id = $2
-		`, event.Timestamp, issueID)
-
-		if err != nil {
-			log.Println("❌ Error updating issue:", err)
-			return
-		}
-
-		// Insert event
-		_, err = db.Exec(`
-			INSERT INTO events (id, issue_id, message, level, timestamp, stacktrace, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, NOW())
-		`, utils.GenerateID("evt"), issueID, event.Message, event.Level, event.Timestamp, StackTraceToJSON(event.StackTrace))
-
-		if err != nil {
-			log.Println("❌ Error inserting event for existing issue:", err)
-			return
-		}
-
-		log.Println("✅ Updated existing issue with ID:", issueID)
+	// unique index on (project_id, fingerprint) recommended
+	var groupId string
+	newGroupId := utils.GenerateID("grp")
+	if err = tx.Get(&groupId, `
+		INSERT INTO groups (id, project_id, fingerprint, status, event_count)
+		VALUES ($1, $2, $3, 'unresolved', 0)
+		ON CONFLICT (project_id, fingerprint)
+		DO UPDATE SET updated_at = NOW()
+		RETURNING id
+	`, newGroupId, projectId, fingerprint); err != nil {
+		log.Println("❌ upsert group:", err)
+		return
 	}
 
-	fmt.Printf("Processing event for project %s, issue %s\n", projectId, issue.ID)
+	eventId := utils.GenerateID("evt")
+	if _, err = tx.Exec(`
+		INSERT INTO events (id, group_id, type, message, level, timestamp, stacktrace)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, eventId, groupId, event.Type, event.Message, event.Level, event.Timestamp, StackTraceToJSON(event.StackTrace)); err != nil {
+		log.Println("❌ insert event:", err)
+		return
+	}
+
+	if _, err = tx.Exec(`
+		UPDATE groups
+		SET event_count = event_count + 1, updated_at = NOW()
+		WHERE id = $1
+	`, groupId); err != nil {
+		log.Println("❌ bump count:", err)
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Println("❌ commit:", err)
+		return
+	}
+
+	fmt.Printf("Processing event for project %s, issue %s\n", projectId, eventId)
 }

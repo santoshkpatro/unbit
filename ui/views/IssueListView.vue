@@ -167,7 +167,7 @@ onMounted(async () => {
           <a-select-option value="resolved">Resolved</a-select-option>
           <a-select-option value="archived">Archived</a-select-option>
         </a-select>
-
+        ¬
         <a-select
           v-model:value="projectFilter"
           placeholder="Project"

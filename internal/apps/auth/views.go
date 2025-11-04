@@ -85,10 +85,11 @@ func (v *AuthContext) AuthStatus(c echo.Context) error {
 	var user User
 	if err := v.DB.Get(&user, "SELECT * FROM users WHERE id = $1", id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			sess.Values["loggedInUser"] = nil
 			return utils.RespondOK(c, map[string]interface{}{
 				"isLoggedIn":  false,
 				"userProfile": nil,
-			}, "User not found")
+			}, "")
 		}
 		return utils.RespondFail(c, http.StatusInternalServerError, "Database error", err.Error())
 	}

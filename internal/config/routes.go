@@ -46,6 +46,7 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 		Cache: cache,
 	}
 	api.GET("/projects", projectContext.ProjectListView)
+	api.POST("/projects", projectContext.ProjectCreateView)
 
 	// Issues routes
 	issueContext := &issues.IssueContext{
