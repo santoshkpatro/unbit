@@ -27,6 +27,7 @@ func init() {
 
 				CREATE TABLE IF NOT EXISTS events (
 					id TEXT PRIMARY KEY,
+					project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 					group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
 					type TEXT NOT NULL,
 					message TEXT NOT NULL,
@@ -37,7 +38,8 @@ func init() {
 					created_at TIMESTAMPTZ DEFAULT NOW(),
 					updated_at TIMESTAMPTZ DEFAULT NOW()
 				);
-				CREATE INDEX IF NOT EXISTS idx_events_group_id ON events(group_id)
+				CREATE INDEX IF NOT EXISTS idx_events_group_id ON events(group_id);
+				CREATE INDEX IF NOT EXISTS idx_events_project_id ON events(project_id);
 			`)
 			if err != nil {
 				return fmt.Errorf("failed to apply migration: %w", err)

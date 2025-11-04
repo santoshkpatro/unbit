@@ -67,9 +67,9 @@ func handleEvent(db *sqlx.DB, dsnToken string, event models.Event) {
 
 	eventId := utils.GenerateID("evt")
 	if _, err = tx.Exec(`
-		INSERT INTO events (id, group_id, type, message, level, timestamp, stacktrace)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, eventId, groupId, event.Type, event.Message, event.Level, event.Timestamp, StackTraceToJSON(event.StackTrace)); err != nil {
+		INSERT INTO events (id, group_id, type, message, level, timestamp, stacktrace, project_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, eventId, groupId, event.Type, event.Message, event.Level, event.Timestamp, StackTraceToJSON(event.StackTrace), projectId); err != nil {
 		log.Println("❌ insert event:", err)
 		return
 	}
