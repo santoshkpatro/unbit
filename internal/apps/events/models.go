@@ -1,7 +1,7 @@
 package events
 
 import (
-	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -26,59 +26,78 @@ type Group struct {
 type Event struct {
 	ID        string    `json:"id"`
 	Type      string    `json:"type"`
-	Message   string    `json:"message"`
 	Level     string    `json:"level"`
+	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
-	CreatedAt time.Time `json:"createdAt"`
-	Project   Project   `json:"project"`
-	Group     Group     `json:"group"`
 }
 
-type eventRow struct {
-	EventID   string    `db:"event_id"`
-	Type      string    `db:"event_type"`
-	Message   string    `db:"event_message"`
-	Level     string    `db:"event_level"`
-	Timestamp time.Time `db:"event_timestamp"`
-	CreatedAt time.Time `db:"created_at"`
-
-	ProjectID   string `db:"project_id"`
-	ProjectName string `db:"project_name"`
-
-	GroupID           string         `db:"group_id"`
-	GroupStatus       string         `db:"group_status"`
-	GroupEventCount   int            `db:"group_event_count"`
-	AssigneeID        sql.NullString `db:"assignee_id"`
-	AssigneeEmail     sql.NullString `db:"assignee_email"`
-	AssigneeFirstName sql.NullString `db:"assignee_first_name"`
+type DayCount struct {
+	Day   string `json:"day"`
+	Count int    `json:"count"`
 }
 
-func (r eventRow) toEvent() Event {
-	var a *Assignee
-	if r.AssigneeID.Valid {
-		a = &Assignee{
-			ID:        r.AssigneeID.String,
-			Email:     r.AssigneeEmail.String,
-			FirstName: r.AssigneeFirstName.String,
+type Issue struct {
+	Event     Event      `json:"event"`
+	Project   Project    `json:"project"`
+	Group     Group      `json:"group"`
+	Last7Days []DayCount `json:"last7Days"`
+}
+
+type issueRow struct {
+	EventID     string          `db:"event_id"`
+	GroupID     string          `db:"group_id"`
+	Message     string          `db:"message"`
+	Type        string          `db:"type"`
+	Level       string          `db:"level"`
+	Status      string          `db:"status"`
+	AssigneeID  *string         `db:"assignee_id"`
+	FirstName   *string         `db:"first_name"`
+	Email       *string         `db:"email"`
+	UserID      *string         `db:"user_id"`
+	ProjectID   string          `db:"project_id"`
+	ProjectName string          `db:"project_name"`
+	Last7Days   json.RawMessage `db:"last_7_days"`
+	EventCount  int             `db:"event_count"`
+}
+
+func (ir *issueRow) ToIssue() Issue {
+	var arr []DayCount
+	if ir.Last7Days != nil {
+		_ = json.Unmarshal(ir.Last7Days, &arr)
+	}
+
+	// ← default nil
+	var assignee *Assignee = nil
+
+	if ir.AssigneeID != nil {
+		assignee = &Assignee{}
+		assignee.ID = *ir.AssigneeID
+
+		if ir.FirstName != nil {
+			assignee.FirstName = *ir.FirstName
+		}
+		if ir.Email != nil {
+			assignee.Email = *ir.Email
 		}
 	}
 
-	return Event{
-		ID:        r.EventID,
-		Type:      r.Type,
-		Message:   r.Message,
-		Level:     r.Level,
-		Timestamp: r.Timestamp,
-		CreatedAt: r.CreatedAt,
+	return Issue{
+		Event: Event{
+			ID:      ir.EventID,
+			Type:    ir.Type,
+			Level:   ir.Level,
+			Message: ir.Message,
+		},
 		Project: Project{
-			ID:   r.ProjectID,
-			Name: r.ProjectName,
+			ID:   ir.ProjectID,
+			Name: ir.ProjectName,
 		},
 		Group: Group{
-			ID:         r.GroupID,
-			Status:     r.GroupStatus,
-			Assignee:   a,
-			EventCount: r.GroupEventCount,
+			ID:         ir.GroupID,
+			Status:     ir.Status,
+			Assignee:   assignee,
+			EventCount: ir.EventCount,
 		},
+		Last7Days: arr,
 	}
 }

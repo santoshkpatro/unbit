@@ -53,5 +53,5 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 		DB:    db,
 		Cache: cache,
 	}
-	api.GET("/events", eventsContext.EventList)
+	api.GET("/events/issues", eventsContext.EventIssues)
 }

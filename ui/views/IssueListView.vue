@@ -1,15 +1,22 @@
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, nextTick, watch } from 'vue'
 import { projectListAPI } from '@/api/projects'
-import { eventListAPI } from '@/api/events'
-import { Search, ChevronDown } from 'lucide-vue-next'
+import { eventIssuesAPI } from '@/api/events'
+import { Search, TrendingUp } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   InboxOutlined,
   FilterOutlined,
   ExclamationCircleOutlined,
+  DeleteOutlined,
+  ExportOutlined,
+  MoreOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+import { Chart, registerables } from 'chart.js'
+
+// Register Chart.js components
+Chart.register(...registerables)
 
 const projects = ref([])
 const events = ref([])
@@ -17,6 +24,7 @@ const selectedRowKeys = ref([])
 const searchText = ref('')
 const statusFilter = ref(null)
 const projectFilter = ref(null)
+const chartInstances = ref({})
 
 const columns = [
   {
@@ -24,12 +32,6 @@ const columns = [
     dataIndex: 'summary',
     key: 'summary',
     width: '40%',
-  },
-  {
-    title: 'Project',
-    dataIndex: ['project', 'name'],
-    key: 'project',
-    width: '15%',
   },
   {
     title: 'Events',
@@ -42,24 +44,42 @@ const columns = [
     title: 'Assignee',
     dataIndex: ['assignee', 'firstName'],
     key: 'assignee',
-    width: '15%',
+    width: '12%',
+  },
+  {
+    title: 'Trend',
+    dataIndex: 'trend',
+    key: 'trend',
+    width: '13%',
+    align: 'center',
   },
   {
     title: 'Last Seen',
     dataIndex: 'lastSeenAt',
     key: 'lastSeenAt',
-    width: '20%',
+    width: '15%',
+  },
+  {
+    title: '',
+    key: 'actions',
+    width: '10%',
+    align: 'center',
   },
 ]
 
 const filteredIssues = computed(() => {
-  let result = events.value.map((event) => ({
-    ...event,
-    summary: event.message,
-    status: event.group?.status || 'unresolved',
-    assignee: event.group?.assignee,
-    eventCount: event.group?.eventCount || 0,
-    lastSeenAt: event.timestamp,
+  let result = events.value.map((item) => ({
+    id: item.event?.id,
+    type: item.event?.type,
+    level: item.event?.level,
+    summary: item.event?.message,
+    timestamp: item.event?.timestamp,
+    project: item.project,
+    status: item.group?.status || 'unresolved',
+    assignee: item.group?.assignee,
+    eventCount: item.group?.eventCount || 0,
+    lastSeenAt: item.event?.timestamp,
+    trend: item.last7Days || [],
   }))
 
   if (searchText.value) {
@@ -67,7 +87,8 @@ const filteredIssues = computed(() => {
     result = result.filter(
       (issue) =>
         issue.summary?.toLowerCase().includes(search) ||
-        issue.assignee?.email?.toLowerCase().includes(search),
+        issue.assignee?.email?.toLowerCase().includes(search) ||
+        issue.project?.name?.toLowerCase().includes(search),
     )
   }
 
@@ -93,6 +114,10 @@ const projectOptions = computed(() => {
   }))
 })
 
+const hasActiveFilters = computed(() => {
+  return searchText.value || statusFilter.value || projectFilter.value
+})
+
 const rowSelection = {
   selectedRowKeys: selectedRowKeys,
   onChange: (keys) => {
@@ -101,11 +126,121 @@ const rowSelection = {
 }
 
 const loadProjects = async () => {
-  projects.value = await projectListAPI()
+  try {
+    projects.value = await projectListAPI()
+  } catch (error) {
+    message.error('Failed to load projects')
+    console.error(error)
+  }
 }
 
 const loadEvents = async () => {
-  events.value = await eventListAPI()
+  try {
+    events.value = await eventIssuesAPI()
+  } catch (error) {
+    message.error('Failed to load events')
+    console.error(error)
+  }
+}
+
+const renderTrendChart = (canvasId, trendData) => {
+  if (!trendData || trendData.length === 0) return
+
+  // Destroy existing chart if it exists
+  if (chartInstances.value[canvasId]) {
+    chartInstances.value[canvasId].destroy()
+  }
+
+  nextTick(() => {
+    const canvas = document.getElementById(canvasId)
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+
+    const labels = trendData.map((d) => {
+      const date = new Date(d.day)
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    })
+    const counts = trendData.map((d) => d.count)
+
+    try {
+      chartInstances.value[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Events',
+              data: counts,
+              borderColor: '#51bc8f',
+              backgroundColor: 'rgba(81, 188, 143, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 0,
+              pointHoverRadius: 3,
+              pointHoverBackgroundColor: '#51bc8f',
+              pointHoverBorderColor: '#fff',
+              pointHoverBorderWidth: 1.5,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false,
+            },
+            tooltip: {
+              enabled: true,
+              mode: 'index',
+              intersect: false,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              padding: 6,
+              bodyFont: {
+                size: 10,
+              },
+              titleFont: {
+                size: 10,
+              },
+              boxPadding: 3,
+              callbacks: {
+                label: function (context) {
+                  return `${context.parsed.y} event${context.parsed.y !== 1 ? 's' : ''}`
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              display: false,
+            },
+            y: {
+              display: false,
+              beginAtZero: true,
+            },
+          },
+          interaction: {
+            intersect: false,
+            mode: 'index',
+          },
+        },
+      })
+    } catch (error) {
+      console.error('Error rendering chart:', error)
+    }
+  })
+}
+
+const renderAllCharts = () => {
+  nextTick(() => {
+    filteredIssues.value.forEach((issue) => {
+      if (issue.trend && issue.trend.length > 0) {
+        renderTrendChart(`trend-${issue.id}`, issue.trend)
+      }
+    })
+  })
 }
 
 const handleResolve = () => {
@@ -126,6 +261,35 @@ const handleArchive = () => {
   selectedRowKeys.value = []
 }
 
+const handleDelete = () => {
+  if (selectedRowKeys.value.length === 0) {
+    message.warning('Please select at least one issue')
+    return
+  }
+  message.success(`Deleted ${selectedRowKeys.value.length} issue(s)`)
+  selectedRowKeys.value = []
+}
+
+const handleExport = () => {
+  if (selectedRowKeys.value.length === 0) {
+    message.warning('Please select at least one issue')
+    return
+  }
+  message.success(`Exported ${selectedRowKeys.value.length} issue(s)`)
+}
+
+const copyIssueLink = (issueId) => {
+  const link = `${window.location.origin}/issues/${issueId}`
+  navigator.clipboard
+    .writeText(link)
+    .then(() => {
+      message.success('Issue link copied to clipboard')
+    })
+    .catch(() => {
+      message.error('Failed to copy link')
+    })
+}
+
 const clearFilters = () => {
   searchText.value = ''
   statusFilter.value = null
@@ -133,7 +297,7 @@ const clearFilters = () => {
 }
 
 const formatDate = (dateString) => {
-  if (!dateString) return '-'
+  if (!dateString || dateString === '0001-01-01T00:00:00Z') return 'Just now'
   const date = new Date(dateString)
   const now = new Date()
   const diff = now - date
@@ -153,223 +317,223 @@ const formatDate = (dateString) => {
   })
 }
 
-const getTypeIcon = (type) => {
-  return type === 'exception' ? 'error' : 'info'
-}
+// Watch for filter changes to re-render charts
+watch(filteredIssues, () => {
+  renderAllCharts()
+})
 
 onMounted(async () => {
   await loadProjects()
   await loadEvents()
+  renderAllCharts()
 })
 </script>
 
 <template>
   <main class="issue-tracker">
     <div class="header">
-      <div class="header-content">
-        <a-typography-title :level="2" style="margin: 0">Issues</a-typography-title>
-        <a-badge :count="unresolvedCount" :number-style="{ backgroundColor: '#f5222d' }">
-          <a-tag color="default" style="margin: 0; padding: 4px 12px">
-            {{ unresolvedCount }} Unresolved
-          </a-tag>
-        </a-badge>
-      </div>
+      <a-typography-title :level="3" style="margin: 0">Issues</a-typography-title>
+      <a-badge :count="unresolvedCount" :number-style="{ backgroundColor: '#f5222d' }" />
     </div>
 
-    <div class="content-wrapper">
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <a-input
-            v-model:value="searchText"
-            placeholder="Search by message, project, or assignee..."
-            class="search-input"
-            allow-clear
-            size="large"
-          >
-            <template #prefix>
-              <Search :size="18" style="color: #8c8c8c" />
-            </template>
-          </a-input>
-
-          <a-select
-            v-model:value="statusFilter"
-            placeholder="All Statuses"
-            class="filter-select"
-            allow-clear
-            size="large"
-          >
-            <a-select-option value="unresolved">Unresolved</a-select-option>
-            <a-select-option value="resolved">Resolved</a-select-option>
-            <a-select-option value="archived">Archived</a-select-option>
-          </a-select>
-
-          <a-select
-            v-model:value="projectFilter"
-            placeholder="All Projects"
-            class="filter-select"
-            allow-clear
-            size="large"
-            :options="projectOptions"
-          />
-
-          <a-button
-            @click="clearFilters"
-            size="large"
-            v-if="searchText || statusFilter || projectFilter"
-          >
-            <template #icon><FilterOutlined /></template>
-            Clear
-          </a-button>
-        </div>
-
-        <div class="toolbar-right" v-if="selectedRowKeys.length > 0">
-          <a-space :size="12">
-            <a-button type="primary" @click="handleResolve" size="large">
+    <a-table
+      size="small"
+      :pagination="false"
+      :columns="columns"
+      :data-source="filteredIssues"
+      :row-selection="rowSelection"
+      :row-key="(record) => record.id"
+    >
+      <template #title>
+        <div v-if="selectedRowKeys.length > 0" class="table-header-actions">
+          <span class="selected-count">{{ selectedRowKeys.length }} selected</span>
+          <a-space>
+            <a-button type="primary" @click="handleResolve">
               <template #icon><CheckCircleOutlined /></template>
-              Resolve ({{ selectedRowKeys.length }})
+              Resolve
             </a-button>
-            <a-button @click="handleArchive" size="large">
+            <a-button @click="handleArchive">
               <template #icon><InboxOutlined /></template>
               Archive
             </a-button>
+            <a-dropdown>
+              <a-button>
+                <template #icon><MoreOutlined /></template>
+                More actions
+              </a-button>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item key="delete" @click="handleDelete">
+                    <DeleteOutlined />
+                    Delete
+                  </a-menu-item>
+                  <a-menu-item key="export" @click="handleExport">
+                    <ExportOutlined />
+                    Export
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </a-space>
         </div>
-      </div>
 
-      <a-table
-        :columns="columns"
-        :data-source="filteredIssues"
-        :row-selection="rowSelection"
-        :row-key="(record) => record.id"
-        :pagination="{
-          pageSize: 20,
-          showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          showTotal: (total) => `${total} issue${total !== 1 ? 's' : ''}`,
-        }"
-        class="issues-table"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'summary'">
-            <div class="issue-cell">
-              <div class="issue-icon">
-                <ExclamationCircleOutlined style="color: #f5222d; font-size: 16px" />
-              </div>
-              <div class="issue-content">
-                <div class="issue-title">{{ record.summary }}</div>
-                <div class="issue-meta">
-                  <a-tag :color="record.type === 'exception' ? 'red' : 'blue'" style="margin: 0">
-                    {{ record.type }}
-                  </a-tag>
-                  <span class="issue-group-id">{{ record.group?.id }}</span>
-                </div>
-              </div>
-            </div>
-          </template>
+        <div v-else class="table-header-filters">
+          <div class="filters-left">
+            <a-input
+              v-model:value="searchText"
+              placeholder="Search by message, project, or assignee..."
+              style="width: 350px"
+              allow-clear
+            >
+              <template #prefix>
+                <Search :size="16" />
+              </template>
+            </a-input>
 
-          <template v-if="column.key === 'project'">
-            <div class="project-cell">
-              <a-typography-text strong>{{ record.project?.name || '-' }}</a-typography-text>
-            </div>
-          </template>
+            <a-select
+              v-model:value="statusFilter"
+              placeholder="All Statuses"
+              style="width: 150px"
+              allow-clear
+            >
+              <a-select-option value="unresolved">Unresolved</a-select-option>
+              <a-select-option value="resolved">Resolved</a-select-option>
+              <a-select-option value="archived">Archived</a-select-option>
+            </a-select>
 
-          <template v-if="column.key === 'eventCount'">
-            <a-badge
-              :count="record.eventCount"
-              :number-style="{ backgroundColor: '#f0f0f0', color: '#595959', fontWeight: '600' }"
-              :overflow-count="999"
+            <a-select
+              v-model:value="projectFilter"
+              placeholder="All Projects"
+              style="width: 180px"
+              allow-clear
+              :options="projectOptions"
             />
-          </template>
 
-          <template v-if="column.key === 'assignee'">
-            <div v-if="record.assignee" class="assignee-cell">
-              <a-avatar
-                size="small"
-                :style="{
-                  backgroundColor: '#722ed1',
-                  marginRight: '8px',
-                  fontWeight: '500',
-                }"
-              >
-                {{ record.assignee.firstName?.[0] }}
-              </a-avatar>
-              <span>{{ record.assignee.firstName }}</span>
+            <a-button @click="clearFilters" v-if="hasActiveFilters">
+              <template #icon><FilterOutlined /></template>
+              Clear
+            </a-button>
+          </div>
+        </div>
+      </template>
+
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'summary'">
+          <div class="issue-cell">
+            <div class="issue-icon">
+              <ExclamationCircleOutlined style="color: #f5222d; font-size: 16px" />
             </div>
-            <a-typography-text type="secondary" v-else>Unassigned</a-typography-text>
-          </template>
-
-          <template v-if="column.key === 'lastSeenAt'">
-            <a-typography-text type="secondary" style="font-size: 13px">
-              {{ formatDate(record.lastSeenAt) }}
-            </a-typography-text>
-          </template>
+            <div class="issue-content">
+              <a-typography-link class="issue-title" href="#">
+                {{ record.summary }}
+              </a-typography-link>
+              <div class="issue-meta">
+                <a-tag color="blue" style="margin: 0">
+                  {{ record.project?.name || 'Unknown' }}
+                </a-tag>
+                <span class="issue-type-text">{{ record.type }}</span>
+              </div>
+            </div>
+          </div>
         </template>
-      </a-table>
-    </div>
+
+        <template v-if="column.key === 'eventCount'">
+          <a-badge
+            :count="record.eventCount"
+            :number-style="{ backgroundColor: '#f0f0f0', color: '#595959', fontWeight: '600' }"
+            :overflow-count="999"
+          />
+        </template>
+
+        <template v-if="column.key === 'assignee'">
+          <div v-if="record.assignee" class="assignee-cell">
+            <a-avatar
+              size="small"
+              :style="{
+                backgroundColor: '#722ed1',
+                marginRight: '8px',
+              }"
+            >
+              {{ record.assignee.firstName?.[0] }}
+            </a-avatar>
+            <span>{{ record.assignee.firstName }}</span>
+          </div>
+          <a-typography-text type="secondary" v-else>Unassigned</a-typography-text>
+        </template>
+
+        <template v-if="column.key === 'trend'">
+          <div v-if="record.trend && record.trend.length > 0" class="trend-chart-container">
+            <canvas :id="`trend-${record.id}`" class="trend-chart"></canvas>
+          </div>
+          <div v-else class="trend-placeholder">
+            <TrendingUp :size="16" style="color: #d9d9d9" />
+          </div>
+        </template>
+
+        <template v-if="column.key === 'lastSeenAt'">
+          <a-typography-text type="secondary">
+            {{ formatDate(record.lastSeenAt) }}
+          </a-typography-text>
+        </template>
+
+        <template v-if="column.key === 'actions'">
+          <a-tooltip title="Copy issue link">
+            <a-button type="text" size="small" @click.stop="copyIssueLink(record.id)">
+              <template #icon>
+                <ExportOutlined style="font-size: 14px" />
+              </template>
+            </a-button>
+          </a-tooltip>
+        </template>
+      </template>
+    </a-table>
   </main>
 </template>
 
 <style scoped>
 .issue-tracker {
-  min-height: 100vh;
-  background: #f5f5f7;
+  padding: 24px;
+  background: #fff;
 }
 
 .header {
-  background: #fff;
-  border-bottom: 1px solid #e8e8e8;
-  padding: 20px 32px;
-}
-
-.header-content {
   display: flex;
   align-items: center;
-  gap: 16px;
-  max-width: 1600px;
-  margin: 0 auto;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
-.content-wrapper {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 24px 32px;
-}
-
-.toolbar {
+.table-header-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  gap: 16px;
-  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: #e6f7ff;
+  border-bottom: 1px solid #91d5ff;
 }
 
-.toolbar-left {
+.table-header-filters {
+  padding: 12px 16px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.filters-left {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  flex: 1;
-}
-
-.toolbar-right {
-  display: flex;
   align-items: center;
 }
 
-.search-input {
-  width: 400px;
-  border-radius: 6px;
-}
-
-.filter-select {
-  width: 180px;
+.selected-count {
+  font-weight: 600;
+  color: #1890ff;
 }
 
 .issue-cell {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 4px 0;
 }
 
 .issue-icon {
@@ -383,12 +547,14 @@ onMounted(async () => {
 }
 
 .issue-title {
-  font-size: 14px;
   font-weight: 500;
-  color: #262626;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   word-break: break-word;
-  line-height: 1.4;
+  color: #262626;
+}
+
+.issue-title:hover {
+  color: #51bc8f;
 }
 
 .issue-meta {
@@ -396,94 +562,48 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  flex-wrap: wrap;
 }
 
-.issue-group-id {
+.issue-type-text {
   color: #8c8c8c;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 11px;
-}
-
-.project-cell {
-  color: #1890ff;
-  font-size: 13px;
+  font-size: 12px;
+  text-transform: capitalize;
 }
 
 .assignee-cell {
   display: flex;
   align-items: center;
-  font-size: 13px;
 }
 
-.issues-table {
-  background: #fff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow:
-    0 1px 2px 0 rgba(0, 0, 0, 0.03),
-    0 1px 6px -1px rgba(0, 0, 0, 0.02),
-    0 2px 4px 0 rgba(0, 0, 0, 0.02);
+.trend-chart-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 0;
 }
 
-:deep(.ant-table) {
-  font-size: 13px;
+.trend-chart {
+  width: 120px;
+  height: 40px;
+}
+
+.trend-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 :deep(.ant-table-thead > tr > th) {
   background: #fafafa;
   font-weight: 600;
-  color: #595959;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid #e8e8e8;
-  padding: 14px 16px;
-}
-
-:deep(.ant-table-tbody > tr) {
-  transition: all 0.2s;
 }
 
 :deep(.ant-table-tbody > tr:hover) {
   cursor: pointer;
-  background: #fafafa;
 }
 
-:deep(.ant-table-tbody > tr > td) {
-  border-bottom: 1px solid #f0f0f0;
-  padding: 16px;
-}
-
-:deep(.ant-table-cell) {
-  vertical-align: middle;
-}
-
-:deep(.ant-checkbox-wrapper) {
-  margin-right: 0;
-}
-
-:deep(.ant-pagination) {
-  margin: 16px 16px;
-}
-
-:deep(.ant-select-selector) {
-  border-radius: 6px !important;
-}
-
-:deep(.ant-input) {
-  border-radius: 6px;
-}
-
-:deep(.ant-btn) {
-  border-radius: 6px;
-  font-weight: 500;
-}
-
-:deep(.ant-tag) {
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border: none;
+:deep(.ant-table-title) {
+  padding: 0 !important;
 }
 </style>
