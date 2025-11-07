@@ -24,11 +24,12 @@ type Group struct {
 }
 
 type Event struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`
-	Level     string    `json:"level"`
-	Message   string    `json:"message"`
-	Timestamp time.Time `json:"timestamp"`
+	ID              string          `json:"id"`
+	Type            string          `json:"type"`
+	Level           string          `json:"level"`
+	Message         string          `json:"message"`
+	Timestamp       time.Time       `json:"timestamp"`
+	StacktraceFirst json.RawMessage `json:"stacktraceFirst,omitempty"`
 }
 
 type DayCount struct {
@@ -44,20 +45,22 @@ type Issue struct {
 }
 
 type issueRow struct {
-	EventID     string          `db:"event_id"`
-	GroupID     string          `db:"group_id"`
-	Message     string          `db:"message"`
-	Type        string          `db:"type"`
-	Level       string          `db:"level"`
-	Status      string          `db:"status"`
-	AssigneeID  *string         `db:"assignee_id"`
-	FirstName   *string         `db:"first_name"`
-	Email       *string         `db:"email"`
-	UserID      *string         `db:"user_id"`
-	ProjectID   string          `db:"project_id"`
-	ProjectName string          `db:"project_name"`
-	Last7Days   json.RawMessage `db:"last_7_days"`
-	EventCount  int             `db:"event_count"`
+	EventID         string          `db:"event_id"`
+	GroupID         string          `db:"group_id"`
+	Message         string          `db:"message"`
+	Type            string          `db:"type"`
+	Level           string          `db:"level"`
+	Status          string          `db:"status"`
+	AssigneeID      *string         `db:"assignee_id"`
+	FirstName       *string         `db:"first_name"`
+	Email           *string         `db:"email"`
+	UserID          *string         `db:"user_id"`
+	ProjectID       string          `db:"project_id"`
+	ProjectName     string          `db:"project_name"`
+	Last7Days       json.RawMessage `db:"last_7_days"`
+	EventCount      int             `db:"event_count"`
+	StacktraceFirst json.RawMessage `db:"stacktrace_first"`
+	Timestamp       time.Time       `db:"timestamp"`
 }
 
 func (ir *issueRow) ToIssue() Issue {
@@ -83,10 +86,12 @@ func (ir *issueRow) ToIssue() Issue {
 
 	return Issue{
 		Event: Event{
-			ID:      ir.EventID,
-			Type:    ir.Type,
-			Level:   ir.Level,
-			Message: ir.Message,
+			ID:              ir.EventID,
+			Type:            ir.Type,
+			Level:           ir.Level,
+			Message:         ir.Message,
+			StacktraceFirst: ir.StacktraceFirst,
+			Timestamp:       ir.Timestamp,
 		},
 		Project: Project{
 			ID:   ir.ProjectID,

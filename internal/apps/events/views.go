@@ -23,7 +23,8 @@ func (v *EventContext) EventIssues(c echo.Context) error {
 					e.project_id,
 					g.event_count,
 					p.name AS project_name,
-					e.timestamp AS event_at
+					e.timestamp AS timestamp,
+					e.stacktrace->0 AS stacktrace_first
 				FROM
 					events e
 					JOIN groups g ON g.id = e.group_id
@@ -64,6 +65,8 @@ func (v *EventContext) EventIssues(c echo.Context) error {
 			u.id AS user_id,
 			i.project_id,
 			i.project_name,
+			i.stacktrace_first,
+			i.timestamp,
 			(
 				SELECT
 					jsonb_agg(
@@ -89,7 +92,7 @@ func (v *EventContext) EventIssues(c echo.Context) error {
 					user_id = $1
 			)
 		ORDER BY
-			i.event_at DESC;
+			i.timestamp DESC;
 	`
 	var rows []issueRow
 	err := v.DB.Select(&rows, query, userID)

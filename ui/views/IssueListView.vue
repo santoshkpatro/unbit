@@ -80,6 +80,7 @@ const filteredIssues = computed(() => {
     eventCount: item.group?.eventCount || 0,
     lastSeenAt: item.event?.timestamp,
     trend: item.last7Days || [],
+    stacktrace: item.event?.stacktraceFirst,
   }))
 
   if (searchText.value) {
@@ -336,157 +337,162 @@ onMounted(async () => {
       <a-badge :count="unresolvedCount" :number-style="{ backgroundColor: '#f5222d' }" />
     </div>
 
-    <a-table
-      size="small"
-      :pagination="false"
-      :columns="columns"
-      :data-source="filteredIssues"
-      :row-selection="rowSelection"
-      :row-key="(record) => record.id"
-    >
-      <template #title>
-        <div v-if="selectedRowKeys.length > 0" class="table-header-actions">
-          <span class="selected-count">{{ selectedRowKeys.length }} selected</span>
-          <a-space>
-            <a-button type="primary" @click="handleResolve">
-              <template #icon><CheckCircleOutlined /></template>
-              Resolve
-            </a-button>
-            <a-button @click="handleArchive">
-              <template #icon><InboxOutlined /></template>
-              Archive
-            </a-button>
-            <a-dropdown>
-              <a-button>
-                <template #icon><MoreOutlined /></template>
-                More actions
+    <div class="table-container">
+      <a-table
+        size="small"
+        :pagination="false"
+        :columns="columns"
+        :data-source="filteredIssues"
+        :row-selection="rowSelection"
+        :row-key="(record) => record.id"
+      >
+        <template #title>
+          <div v-if="selectedRowKeys.length > 0" class="table-header-actions">
+            <span class="selected-count">{{ selectedRowKeys.length }} selected</span>
+            <a-space>
+              <a-button type="primary" @click="handleResolve">
+                <template #icon><CheckCircleOutlined /></template>
+                Resolve
               </a-button>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item key="delete" @click="handleDelete">
-                    <DeleteOutlined />
-                    Delete
-                  </a-menu-item>
-                  <a-menu-item key="export" @click="handleExport">
-                    <ExportOutlined />
-                    Export
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </a-space>
-        </div>
-
-        <div v-else class="table-header-filters">
-          <div class="filters-left">
-            <a-input
-              v-model:value="searchText"
-              placeholder="Search by message, project, or assignee..."
-              style="width: 350px"
-              allow-clear
-            >
-              <template #prefix>
-                <Search :size="16" />
-              </template>
-            </a-input>
-
-            <a-select
-              v-model:value="statusFilter"
-              placeholder="All Statuses"
-              style="width: 150px"
-              allow-clear
-            >
-              <a-select-option value="unresolved">Unresolved</a-select-option>
-              <a-select-option value="resolved">Resolved</a-select-option>
-              <a-select-option value="archived">Archived</a-select-option>
-            </a-select>
-
-            <a-select
-              v-model:value="projectFilter"
-              placeholder="All Projects"
-              style="width: 180px"
-              allow-clear
-              :options="projectOptions"
-            />
-
-            <a-button @click="clearFilters" v-if="hasActiveFilters">
-              <template #icon><FilterOutlined /></template>
-              Clear
-            </a-button>
+              <a-button @click="handleArchive">
+                <template #icon><InboxOutlined /></template>
+                Archive
+              </a-button>
+              <a-dropdown>
+                <a-button>
+                  <template #icon><MoreOutlined /></template>
+                  More actions
+                </a-button>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item key="delete" @click="handleDelete">
+                      <DeleteOutlined />
+                      Delete
+                    </a-menu-item>
+                    <a-menu-item key="export" @click="handleExport">
+                      <ExportOutlined />
+                      Export
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+            </a-space>
           </div>
-        </div>
-      </template>
 
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'summary'">
-          <div class="issue-cell">
-            <div class="issue-icon">
-              <ExclamationCircleOutlined style="color: #f5222d; font-size: 16px" />
+          <div v-else class="table-header-filters">
+            <div class="filters-left">
+              <a-input
+                v-model:value="searchText"
+                placeholder="Search by message, project, or assignee..."
+                style="width: 350px"
+                allow-clear
+              >
+                <template #prefix>
+                  <Search :size="16" />
+                </template>
+              </a-input>
+
+              <a-select
+                v-model:value="statusFilter"
+                placeholder="All Statuses"
+                style="width: 150px"
+                allow-clear
+              >
+                <a-select-option value="unresolved">Unresolved</a-select-option>
+                <a-select-option value="resolved">Resolved</a-select-option>
+                <a-select-option value="archived">Archived</a-select-option>
+              </a-select>
+
+              <a-select
+                v-model:value="projectFilter"
+                placeholder="All Projects"
+                style="width: 180px"
+                allow-clear
+                :options="projectOptions"
+              />
+
+              <a-button @click="clearFilters" v-if="hasActiveFilters">
+                <template #icon><FilterOutlined /></template>
+                Clear
+              </a-button>
             </div>
-            <div class="issue-content">
-              <a-typography-link class="issue-title" href="#">
-                {{ record.summary }}
-              </a-typography-link>
-              <div class="issue-meta">
-                <a-tag color="blue" style="margin: 0">
-                  {{ record.project?.name || 'Unknown' }}
-                </a-tag>
-                <span class="issue-type-text">{{ record.type }}</span>
+          </div>
+        </template>
+
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'summary'">
+            <div class="issue-cell">
+              <div class="issue-content">
+                <a-typography-link class="issue-title" href="#">
+                  {{ record.summary }}
+                </a-typography-link>
+                <div class="issue-meta">
+                  <span class="project-name">{{ record.project?.name || 'Unknown' }}</span>
+                  <span class="meta-separator">|</span>
+                  <span class="issue-type-text">{{ record.type }}</span>
+                </div>
+                <div v-if="record.stacktrace" class="stacktrace-preview">
+                  <span class="stacktrace-function">{{ record.stacktrace.function }}</span>
+                  <span class="stacktrace-separator">in</span>
+                  <span class="stacktrace-file">{{ record.stacktrace.file }}</span>
+                  <span class="stacktrace-separator">at line</span>
+                  <span class="stacktrace-line">{{ record.stacktrace.line }}</span>
+                </div>
               </div>
             </div>
-          </div>
-        </template>
+          </template>
 
-        <template v-if="column.key === 'eventCount'">
-          <a-badge
-            :count="record.eventCount"
-            :number-style="{ backgroundColor: '#f0f0f0', color: '#595959', fontWeight: '600' }"
-            :overflow-count="999"
-          />
-        </template>
+          <template v-if="column.key === 'eventCount'">
+            <a-badge
+              :count="record.eventCount"
+              :number-style="{ backgroundColor: '#f0f0f0', color: '#595959', fontWeight: '600' }"
+              :overflow-count="999"
+            />
+          </template>
 
-        <template v-if="column.key === 'assignee'">
-          <div v-if="record.assignee" class="assignee-cell">
-            <a-avatar
-              size="small"
-              :style="{
-                backgroundColor: '#722ed1',
-                marginRight: '8px',
-              }"
-            >
-              {{ record.assignee.firstName?.[0] }}
-            </a-avatar>
-            <span>{{ record.assignee.firstName }}</span>
-          </div>
-          <a-typography-text type="secondary" v-else>Unassigned</a-typography-text>
-        </template>
+          <template v-if="column.key === 'assignee'">
+            <div v-if="record.assignee" class="assignee-cell">
+              <a-avatar
+                size="small"
+                :style="{
+                  backgroundColor: '#722ed1',
+                  marginRight: '8px',
+                }"
+              >
+                {{ record.assignee.firstName?.[0] }}
+              </a-avatar>
+              <span>{{ record.assignee.firstName }}</span>
+            </div>
+            <a-typography-text type="secondary" v-else>Unassigned</a-typography-text>
+          </template>
 
-        <template v-if="column.key === 'trend'">
-          <div v-if="record.trend && record.trend.length > 0" class="trend-chart-container">
-            <canvas :id="`trend-${record.id}`" class="trend-chart"></canvas>
-          </div>
-          <div v-else class="trend-placeholder">
-            <TrendingUp :size="16" style="color: #d9d9d9" />
-          </div>
-        </template>
+          <template v-if="column.key === 'trend'">
+            <div v-if="record.trend && record.trend.length > 0" class="trend-chart-container">
+              <canvas :id="`trend-${record.id}`" class="trend-chart"></canvas>
+            </div>
+            <div v-else class="trend-placeholder">
+              <TrendingUp :size="16" style="color: #d9d9d9" />
+            </div>
+          </template>
 
-        <template v-if="column.key === 'lastSeenAt'">
-          <a-typography-text type="secondary">
-            {{ formatDate(record.lastSeenAt) }}
-          </a-typography-text>
-        </template>
+          <template v-if="column.key === 'lastSeenAt'">
+            <a-typography-text type="secondary">
+              {{ formatDate(record.lastSeenAt) }}
+            </a-typography-text>
+          </template>
 
-        <template v-if="column.key === 'actions'">
-          <a-tooltip title="Copy issue link">
-            <a-button type="text" size="small" @click.stop="copyIssueLink(record.id)">
-              <template #icon>
-                <ExportOutlined style="font-size: 14px" />
-              </template>
-            </a-button>
-          </a-tooltip>
+          <template v-if="column.key === 'actions'">
+            <a-tooltip title="Copy issue link">
+              <a-button type="text" size="small" @click.stop="copyIssueLink(record.id)">
+                <template #icon>
+                  <ExportOutlined style="font-size: 14px" />
+                </template>
+              </a-button>
+            </a-tooltip>
+          </template>
         </template>
-      </template>
-    </a-table>
+      </a-table>
+    </div>
   </main>
 </template>
 
@@ -536,11 +542,6 @@ onMounted(async () => {
   align-items: flex-start;
 }
 
-.issue-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
 .issue-content {
   flex: 1;
   min-width: 0;
@@ -565,10 +566,55 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
+.project-name {
+  color: #1890ff;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.meta-separator {
+  color: #d9d9d9;
+  margin: 0 2px;
+}
+
 .issue-type-text {
   color: #8c8c8c;
   font-size: 12px;
   text-transform: capitalize;
+}
+
+.stacktrace-preview {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #8c8c8c;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+  line-height: 1.4;
+  padding: 4px 8px;
+  background: #fafafa;
+  border-radius: 3px;
+  border-left: 2px solid #e8e8e8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stacktrace-function {
+  color: #722ed1;
+  font-weight: 500;
+}
+
+.stacktrace-separator {
+  color: #bfbfbf;
+  margin: 0 4px;
+}
+
+.stacktrace-file {
+  color: #595959;
+}
+
+.stacktrace-line {
+  color: #1890ff;
+  font-weight: 500;
 }
 
 .assignee-cell {
