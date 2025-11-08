@@ -36,6 +36,47 @@ const statusFilter = ref(null)
 const projectFilter = ref(null)
 const chartInstances = ref({})
 
+// ---- Theme helpers (use Ant Design Vue CSS variable or fallback to your new primary) ----
+const getPrimaryColor = () => {
+  const cssVar = getComputedStyle(document.documentElement)
+    .getPropertyValue('--ant-color-primary')
+    ?.trim()
+  return cssVar || '#E1306C'
+}
+
+const toRgba = (hexOrRgb, alpha = 1) => {
+  const clamp = (n) => Math.max(0, Math.min(255, n))
+  if (!hexOrRgb) return `rgba(225, 48, 108, ${alpha})` // fallback #E1306C
+  const s = hexOrRgb.replace(/\s+/g, '')
+  if (s.startsWith('rgb')) {
+    const nums = s
+      .replace(/rgba?\(/, '')
+      .replace(/\)/, '')
+      .split(',')
+      .slice(0, 3)
+      .map((v) => clamp(parseInt(v, 10) || 0))
+    return `rgba(${nums[0]}, ${nums[1]}, ${nums[2]}, ${alpha})`
+  }
+  // hex (#rgb or #rrggbb)
+  let r = 225,
+    g = 48,
+    b = 108 // default #E1306C
+  const m = s.match(/^#?([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$/)
+  if (m) {
+    const h = m[1]
+    if (h.length === 3) {
+      r = parseInt(h[0] + h[0], 16)
+      g = parseInt(h[1] + h[1], 16)
+      b = parseInt(h[2] + h[2], 16)
+    } else {
+      r = parseInt(h.slice(0, 2), 16)
+      g = parseInt(h.slice(2, 4), 16)
+      b = parseInt(h.slice(4, 6), 16)
+    }
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 // Columns: "Last seen" inline in Issue column; Assignee is a dropdown; Trend is wider
 const columns = [
   { title: 'Issue', dataIndex: ['event', 'message'], key: 'message', width: '45%' },
@@ -133,7 +174,7 @@ const formatTimestamp = (ts) => {
   })
 }
 
-/** Trend charts — back to LINE spark chart */
+/** Trend charts — now use your primary color */
 const renderTrendChart = (canvasId, last7Days) => {
   if (!last7Days?.length) return
 
@@ -151,6 +192,8 @@ const renderTrendChart = (canvasId, last7Days) => {
     )
     const counts = last7Days.map((d) => d.count)
 
+    const primary = getPrimaryColor()
+
     chartInstances.value[canvasId] = new Chart(ctx, {
       type: 'line',
       data: {
@@ -159,8 +202,8 @@ const renderTrendChart = (canvasId, last7Days) => {
           {
             label: 'Events',
             data: counts,
-            borderColor: '#51bc8f',
-            backgroundColor: 'rgba(81,188,143,0.12)',
+            borderColor: primary,
+            backgroundColor: toRgba(primary, 0.12),
             borderWidth: 2,
             fill: true,
             tension: 0.4,
@@ -456,7 +499,7 @@ const handleMute = () => {
 
 .selected-count {
   font-weight: 600;
-  color: #1890ff;
+  color: var(--ant-color-primary);
 }
 
 .issue-cell {
@@ -477,7 +520,7 @@ const handleMute = () => {
   color: #262626;
 }
 .issue-title:hover {
-  color: #51bc8f;
+  color: var(--ant-color-primary);
 }
 
 .issue-meta {
@@ -493,7 +536,7 @@ const handleMute = () => {
 }
 
 .project-name {
-  color: #1890ff;
+  color: var(--ant-color-primary);
   font-weight: 500;
   font-size: 12px;
 }
@@ -533,7 +576,7 @@ const handleMute = () => {
   color: #595959;
 }
 .stacktrace-line {
-  color: #1890ff;
+  color: var(--ant-color-primary);
   font-weight: 500;
 }
 

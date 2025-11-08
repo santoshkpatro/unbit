@@ -4,7 +4,7 @@ import { Notivue, Notification } from 'notivue'
 
 const theme = {
   token: {
-    colorPrimary: '#51bc8f',
+    colorPrimary: '#E1306C',
     borderRadius: 4,
     fontSize: 13,
   },
