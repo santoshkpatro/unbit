@@ -10,6 +10,7 @@ import {
   DeleteOutlined,
   ExportOutlined,
   MoreOutlined,
+  SoundOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { Chart, registerables } from 'chart.js'
@@ -27,16 +28,17 @@ Chart.register(...registerables)
  *  }
  * ]
  */
-const projects = ref([]) // optional: used to show project filter labels
-const events = ref([]) // raw payload array
+const projects = ref([])
+const events = ref([])
 const selectedRowKeys = ref([])
 const searchText = ref('')
-const statusFilter = ref(null) // 'unresolved' | 'resolved' | 'archived'
-const projectFilter = ref(null) // project.id
+const statusFilter = ref(null)
+const projectFilter = ref(null)
 const chartInstances = ref({})
 
+// Columns: "Last seen" inline in Issue column; Assignee is a dropdown; Trend is wider
 const columns = [
-  { title: 'Issue', dataIndex: ['event', 'message'], key: 'message', width: '40%' },
+  { title: 'Issue', dataIndex: ['event', 'message'], key: 'message', width: '45%' },
   {
     title: 'Events',
     dataIndex: ['group', 'eventCount'],
@@ -44,13 +46,12 @@ const columns = [
     width: '10%',
     align: 'center',
   },
-  { title: 'Assignee', dataIndex: ['group', 'assignee'], key: 'assignee', width: '12%' },
-  { title: 'Trend', dataIndex: 'last7Days', key: 'trend', width: '13%', align: 'center' },
-  { title: 'Last Seen', dataIndex: ['event', 'timestamp'], key: 'timestamp', width: '15%' },
+  { title: 'Assignee', dataIndex: ['group', 'assignee'], key: 'assignee', width: '14%' },
+  { title: 'Trend', dataIndex: 'last7Days', key: 'trend', width: '21%', align: 'center' },
   { title: '', key: 'actions', width: '10%', align: 'center' },
 ]
 
-// filters/search kept simple, operate on RAW events array
+// Filters/search on raw events
 const filteredEvents = computed(() => {
   let list = events.value
 
@@ -64,13 +65,8 @@ const filteredEvents = computed(() => {
     })
   }
 
-  if (statusFilter.value) {
-    list = list.filter((row) => row.group?.status === statusFilter.value)
-  }
-
-  if (projectFilter.value) {
-    list = list.filter((row) => row.project?.id === projectFilter.value)
-  }
+  if (statusFilter.value) list = list.filter((row) => row.group?.status === statusFilter.value)
+  if (projectFilter.value) list = list.filter((row) => row.project?.id === projectFilter.value)
 
   return list
 })
@@ -80,7 +76,6 @@ const unresolvedCount = computed(
 )
 
 const projectOptions = computed(() => projects.value.map((p) => ({ label: p.name, value: p.id })))
-
 const hasActiveFilters = computed(
   () => !!(searchText.value || statusFilter.value || projectFilter.value),
 )
@@ -94,7 +89,7 @@ const loadProjects = async () => {
   try {
     projects.value = await projectListAPI()
   } catch {
-    // non-fatal
+    /* non-fatal */
   }
 }
 
@@ -106,7 +101,6 @@ const loadEvents = async () => {
   }
 }
 
-// tiny helpers that use payload fields directly
 const copyIssueLink = (eventId) => {
   const link = `${window.location.origin}/issues/${eventId}`
   navigator.clipboard
@@ -139,7 +133,7 @@ const formatTimestamp = (ts) => {
   })
 }
 
-/** charts — simple and direct from last7Days (no remap) */
+/** Trend charts — back to LINE spark chart */
 const renderTrendChart = (canvasId, last7Days) => {
   if (!last7Days?.length) return
 
@@ -166,7 +160,7 @@ const renderTrendChart = (canvasId, last7Days) => {
             label: 'Events',
             data: counts,
             borderColor: '#51bc8f',
-            backgroundColor: 'rgba(81,188,143,0.1)',
+            backgroundColor: 'rgba(81,188,143,0.12)',
             borderWidth: 2,
             fill: true,
             tension: 0.4,
@@ -177,8 +171,9 @@ const renderTrendChart = (canvasId, last7Days) => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
         scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+        elements: { line: { capBezierPoints: true } },
       },
     })
   })
@@ -187,9 +182,7 @@ const renderTrendChart = (canvasId, last7Days) => {
 const renderAllCharts = () => {
   nextTick(() => {
     filteredEvents.value.forEach((row) => {
-      if (row.last7Days?.length) {
-        renderTrendChart(`trend-${row.event?.id}`, row.last7Days)
-      }
+      if (row.last7Days?.length) renderTrendChart(`trend-${row.event?.id}`, row.last7Days)
     })
   })
 }
@@ -202,7 +195,7 @@ onMounted(async () => {
   renderAllCharts()
 })
 
-/** simple bulk actions (demo toasts only) */
+/** bulk actions (demo toasts only) */
 const handleResolve = () => {
   if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
   message.success(`Resolved ${selectedRowKeys.value.length} issue(s)`)
@@ -222,13 +215,50 @@ const handleExport = () => {
   if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
   message.success(`Exported ${selectedRowKeys.value.length} issue(s)`)
 }
+const handleMute = () => {
+  if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
+  message.success(`Muted ${selectedRowKeys.value.length} issue(s)`)
+  selectedRowKeys.value = []
+}
 </script>
 
 <template>
   <main class="issue-tracker">
+    <!-- Fixed header with actions on the right -->
     <div class="header">
-      <a-typography-title :level="3" style="margin: 0">Issues</a-typography-title>
-      <a-badge :count="unresolvedCount" :number-style="{ backgroundColor: '#f5222d' }" />
+      <div class="header-left">
+        <a-typography-title :level="3" style="margin: 0">Issues</a-typography-title>
+        <a-badge :count="unresolvedCount" :number-style="{ backgroundColor: '#f5222d' }" />
+      </div>
+
+      <div class="header-actions">
+        <a-space>
+          <a-button type="primary" :disabled="!selectedRowKeys.length" @click="handleResolve">
+            <template #icon><CheckCircleOutlined /></template>Resolve
+          </a-button>
+          <a-button :disabled="!selectedRowKeys.length" @click="handleArchive">
+            <template #icon><InboxOutlined /></template>Archive
+          </a-button>
+          <a-button :disabled="!selectedRowKeys.length" @click="handleMute">
+            <template #icon><SoundOutlined /></template>Mute
+          </a-button>
+          <a-dropdown>
+            <a-button :disabled="!selectedRowKeys.length">
+              <template #icon><MoreOutlined /></template>More actions
+            </a-button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="delete" @click="handleDelete" :disabled="!selectedRowKeys.length">
+                  <DeleteOutlined />Delete
+                </a-menu-item>
+                <a-menu-item key="export" @click="handleExport" :disabled="!selectedRowKeys.length">
+                  <ExportOutlined />Export
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </a-space>
+      </div>
     </div>
 
     <div class="table-container">
@@ -237,41 +267,12 @@ const handleExport = () => {
         :pagination="false"
         :columns="columns"
         :data-source="filteredEvents"
-        :row-selection="{
-          selectedRowKeys,
-          onChange: (keys) => (selectedRowKeys = keys),
-        }"
+        :row-selection="rowSelection"
         :row-key="(record) => record.event?.id"
       >
         <template #title>
-          <div v-if="selectedRowKeys.length" class="table-header-actions">
-            <span class="selected-count">{{ selectedRowKeys.length }} selected</span>
-            <a-space>
-              <a-button type="primary" @click="handleResolve">
-                <template #icon><CheckCircleOutlined /></template>Resolve
-              </a-button>
-              <a-button @click="handleArchive">
-                <template #icon><InboxOutlined /></template>Archive
-              </a-button>
-              <a-dropdown>
-                <a-button
-                  ><template #icon><MoreOutlined /></template>More actions</a-button
-                >
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item key="delete" @click="handleDelete">
-                      <DeleteOutlined />Delete
-                    </a-menu-item>
-                    <a-menu-item key="export" @click="handleExport">
-                      <ExportOutlined />Export
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-            </a-space>
-          </div>
-
-          <div v-else class="table-header-filters">
+          <!-- Filters only -->
+          <div class="table-header-filters">
             <div class="filters-left">
               <a-input
                 v-model:value="searchText"
@@ -309,7 +310,7 @@ const handleExport = () => {
         </template>
 
         <template #bodyCell="{ column, record }">
-          <!-- message / context -->
+          <!-- Issue cell: title + meta; includes Last Seen inline -->
           <template v-if="column.key === 'message'">
             <div class="issue-cell">
               <div class="issue-content">
@@ -321,6 +322,10 @@ const handleExport = () => {
                   <span class="project-name">{{ record.project?.name || 'Unknown' }}</span>
                   <span class="meta-separator">|</span>
                   <span class="issue-type-text">{{ record.event?.type }}</span>
+                  <span class="meta-separator">|</span>
+                  <span class="last-seen"
+                    >Last seen {{ formatTimestamp(record.event?.timestamp) }}</span
+                  >
                 </div>
 
                 <div v-if="record.event?.stacktraceFirst" class="stacktrace-preview">
@@ -345,18 +350,17 @@ const handleExport = () => {
             />
           </template>
 
-          <!-- assignee -->
+          <!-- assignee: dropdown (empty options for now) -->
           <template v-if="column.key === 'assignee'">
-            <div v-if="record.group?.assignee" class="assignee-cell">
-              <a-avatar size="small" :style="{ backgroundColor: '#722ed1', marginRight: '8px' }">
-                {{ record.group.assignee.firstName?.[0] }}
-              </a-avatar>
-              <span>{{ record.group.assignee.firstName }}</span>
-            </div>
-            <a-typography-text type="secondary" v-else>Unassigned</a-typography-text>
+            <a-select
+              :options="[]"
+              placeholder="Select assignee"
+              style="width: 160px"
+              allow-clear
+            />
           </template>
 
-          <!-- trend -->
+          <!-- trend (LINE spark) -->
           <template v-if="column.key === 'trend'">
             <div v-if="record.last7Days?.length" class="trend-chart-container">
               <canvas :id="`trend-${record.event?.id}`" class="trend-chart"></canvas>
@@ -366,25 +370,23 @@ const handleExport = () => {
             </div>
           </template>
 
-          <!-- last seen -->
-          <template v-if="column.key === 'timestamp'">
-            <a-typography-text type="secondary">
-              {{ formatTimestamp(record.event?.timestamp) }}
-            </a-typography-text>
-          </template>
-
-          <!-- actions -->
+          <!-- row actions: dropdown only; copy moved inside menu -->
           <template v-if="column.key === 'actions'">
-            <a-tooltip title="Copy issue link">
-              <a-button
-                type="text"
-                size="small"
-                @click.stop="copyIssueLink(record.event?.id)"
-                aria-label="Copy issue link"
-              >
-                <template #icon><ExportOutlined style="font-size: 14px" /></template>
+            <a-dropdown placement="bottomRight" :trigger="['click']">
+              <a-button type="text" size="small" aria-label="More actions">
+                <template #icon><MoreOutlined style="font-size: 16px" /></template>
               </a-button>
-            </a-tooltip>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item key="copy" @click="copyIssueLink(record.event?.id)">
+                    <ExportOutlined /> Copy Issue Link
+                  </a-menu-item>
+                  <a-menu-item key="jira"> <MoreOutlined /> Create Jira Ticket </a-menu-item>
+                  <a-menu-item key="email"> <MoreOutlined /> Send Email </a-menu-item>
+                  <a-menu-item key="custom"> <MoreOutlined /> Custom Action </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </template>
         </template>
       </a-table>
@@ -399,27 +401,43 @@ const handleExport = () => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 24px;
   background: #fff;
 }
 
+/* Fixed header */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.header-left {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
 }
 
-/* inner scroller */
+.header-actions :deep(.ant-btn + .ant-btn) {
+  margin-left: 8px;
+}
+
+/* inner scroller (everything below header) */
 .table-container {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  border-radius: 8px;
+  padding: 0 24px 24px;
+  border-radius: 0;
 }
 
-/* sticky toolbar inside scroller */
-.table-header-actions,
+/* sticky toolbar inside scroller (filters) */
 .table-header-filters {
   position: sticky;
   top: 0;
@@ -468,6 +486,10 @@ const handleExport = () => {
   gap: 8px;
   font-size: 12px;
   flex-wrap: wrap;
+}
+
+.last-seen {
+  color: #8c8c8c;
 }
 
 .project-name {
@@ -520,6 +542,7 @@ const handleExport = () => {
   align-items: center;
 }
 
+/* trend chart (line) */
 .trend-chart-container {
   display: flex;
   justify-content: center;
@@ -527,8 +550,8 @@ const handleExport = () => {
   padding: 4px 0;
 }
 .trend-chart {
-  width: 120px;
-  height: 40px;
+  width: 220px;
+  height: 48px;
 }
 .trend-placeholder {
   display: flex;
