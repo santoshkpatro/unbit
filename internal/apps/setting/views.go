@@ -35,11 +35,11 @@ func setNested(out map[string]any, dotted string, val any) {
 
 func (v *SettingContext) SettingMeta(c echo.Context) error {
 	keys := []string{
-		"org.site_name",
-		"org.root_url",
-		"org.support_email",
-		"system.maintenance_mode",
-		"system.maintenance_message",
+		"org.siteName",
+		"org.rootUrl",
+		"org.supportEmail",
+		"system.maintenanceMode",
+		"system.maintenanceMessage",
 		"ui.theme",
 		"ui.language",
 	}
