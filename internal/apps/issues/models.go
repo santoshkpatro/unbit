@@ -52,18 +52,23 @@ type Issue struct {
 }
 
 type IssueDetail struct {
-	ID         string       `json:"id"`
-	EventID    string       `json:"eventId"`
-	EventCount int          `json:"eventCount"`
-	Timestamp  time.Time    `json:"timestamp"`
-	Status     string       `json:"status"`
-	Message    string       `json:"message"`
-	Level      string       `json:"level"`
-	Type       string       `json:"type"`
-	Assignee   *Assignee    `json:"assignee"`
-	Project    Project      `json:"project"`
-	Stacktrace []Stacktrace `json:"stacktrace"`
-	Age        int          `json:"age"`
+	ID         string          `json:"id"`
+	EventID    string          `json:"eventId"`
+	EventCount int             `json:"eventCount"`
+	Timestamp  time.Time       `json:"timestamp"`
+	Status     string          `json:"status"`
+	Message    string          `json:"message"`
+	Level      string          `json:"level"`
+	Type       string          `json:"type"`
+	Assignee   *Assignee       `json:"assignee"`
+	Project    Project         `json:"project"`
+	Stacktrace []Stacktrace    `json:"stacktrace"`
+	Age        int             `json:"age"`
+	Runtime    json.RawMessage `json:"runtime"`
+	OS         json.RawMessage `json:"os"`
+	Process    json.RawMessage `json:"process"`
+	Thread     json.RawMessage `json:"thread"`
+	Host       json.RawMessage `json:"host"`
 }
 
 type issueRow struct {
@@ -102,6 +107,11 @@ type issueDetailRow struct {
 	IssueCountReport json.RawMessage `db:"issue_count_report"`
 	Age              int             `db:"age"`
 	Stacktrace       json.RawMessage `db:"stacktrace"`
+	Runtime          json.RawMessage `db:"runtime"`
+	OS               json.RawMessage `db:"os"`
+	Process          json.RawMessage `db:"process"`
+	Thread           json.RawMessage `db:"thread"`
+	Host             json.RawMessage `db:"host"`
 }
 
 func (ir *issueRow) ToIssue() (Issue, error) {
@@ -178,5 +188,10 @@ func (ir *issueDetailRow) ToIssueDetail() (IssueDetail, error) {
 		},
 		Stacktrace: stacktrace,
 		Age:        ir.Age,
+		Runtime:    ir.Runtime,
+		OS:         ir.OS,
+		Process:    ir.Process,
+		Thread:     ir.Thread,
+		Host:       ir.Host,
 	}, nil
 }

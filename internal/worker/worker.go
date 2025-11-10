@@ -105,5 +105,6 @@ func PropertiesToJSON(props models.Properties) string {
 	if err != nil {
 		return "{}"
 	}
+
 	return string(jsonData)
 }

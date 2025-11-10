@@ -171,6 +171,11 @@ func (v *IssueContext) IssueDetailsView(c echo.Context) error {
 			e.properties ->> 'type' AS type,
 			e.properties ->> 'level' AS level,
 			e.properties -> 'stacktrace' AS stacktrace,
+			e.properties -> 'runtime' AS runtime,
+			e.properties -> 'os' AS os,
+			e.properties -> 'process' AS process,
+			e.properties -> 'thread' AS thread,
+			e.properties -> 'host' AS host,
 			floor(
 				extract(
 					epoch

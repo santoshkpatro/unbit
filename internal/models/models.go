@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Frame struct {
 	Function string `json:"function"`
@@ -21,10 +24,17 @@ type Issue struct {
 }
 
 type Properties struct {
-	Type       string  `json:"type"`
-	Message    string  `json:"message"`
-	Level      string  `json:"level"`
-	Stacktrace []Frame `json:"stacktrace"`
+	Type       string          `json:"type"`
+	Message    string          `json:"message"`
+	Level      string          `json:"level"`
+	Stacktrace []Frame         `json:"stacktrace"`
+	Runtime    json.RawMessage `json:"runtime"`
+	OS         json.RawMessage `json:"os"`
+	Process    json.RawMessage `json:"process"`
+	Thread     json.RawMessage `json:"thread"`
+	Argv       []string        `json:"argv"`
+	Executable string          `json:"executable"`
+	Host       json.RawMessage `json:"host"`
 }
 
 type Event struct {
