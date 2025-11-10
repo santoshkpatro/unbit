@@ -9,7 +9,7 @@ type Frame struct {
 	Code     string `json:"code"`
 }
 
-type Group struct {
+type Issue struct {
 	ID          string    `db:"id"`
 	ProjectID   string    `db:"project_id"`
 	Fingerprint string    `db:"fingerprint"`
@@ -20,12 +20,16 @@ type Group struct {
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
+type Properties struct {
+	Type       string  `json:"type"`
+	Message    string  `json:"message"`
+	Level      string  `json:"level"`
+	Stacktrace []Frame `json:"stacktrace"`
+}
+
 type Event struct {
-	Type       string    `json:"type"`
-	Message    string    `json:"message"`
-	Level      string    `json:"level"`
-	Timestamp  time.Time `json:"timestamp"`
-	StackTrace []Frame   `json:"stacktrace"`
+	Timestamp  time.Time  `json:"timestamp"`
+	Properties Properties `json:"properties"`
 }
 
 type Payload struct {

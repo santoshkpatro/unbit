@@ -8,10 +8,10 @@ import (
 	"github.com/santoshkpatro/unbit/internal/models"
 )
 
-func ComputeFingerprint(event models.Event) string {
+func ComputeFingerprint(properties models.Properties) string {
 	// Implement fingerprint computation logic here
-	data := event.Message
-	for _, f := range event.StackTrace {
+	data := properties.Message
+	for _, f := range properties.Stacktrace {
 		data += fmt.Sprintf("%s:%s:%d", f.Function, f.File, f.Line)
 	}
 	hash := sha1.Sum([]byte(data))

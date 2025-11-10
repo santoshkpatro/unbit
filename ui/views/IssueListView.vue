@@ -1,198 +1,132 @@
 <script setup>
 import { onMounted, ref, computed, nextTick, watch } from 'vue'
-import { projectListAPI } from '@/api/projects'
 import { eventIssuesAPI } from '@/api/events'
-import { Search, TrendingUp } from 'lucide-vue-next'
-import {
-  CheckCircleOutlined,
-  InboxOutlined,
-  FilterOutlined,
-  DeleteOutlined,
-  ExportOutlined,
-  MoreOutlined,
-  SoundOutlined,
-} from '@ant-design/icons-vue'
+import { projectListAPI } from '@/api/projects'
+import { Search, TrendingUp, MoreVertical } from 'lucide-vue-next'
 import { message } from 'ant-design-vue'
 import { Chart, registerables } from 'chart.js'
-
 Chart.register(...registerables)
 
-/**
- * Raw data, same shape as API:
- * [
- *  {
- *    event: {...},
- *    project: {...},
- *    group: {...},
- *    last7Days: [{day,count}, ...]
- *  }
- * ]
- */
+/** API: [{ id, eventId, eventCount, timestamp, message, level, type, assignee, age, project:{id,name}, issueCountReport:[{date,eventCount}], firstStackTrace:{function,file,line,code} }] */
+const issues = ref([])
 const projects = ref([])
-const events = ref([])
 const selectedRowKeys = ref([])
 const searchText = ref('')
-const statusFilter = ref(null)
 const projectFilter = ref(null)
 const chartInstances = ref({})
 
-// ---- Theme helpers (use Ant Design Vue CSS variable or fallback to your new primary) ----
-const getPrimaryColor = () => {
-  const cssVar = getComputedStyle(document.documentElement)
-    .getPropertyValue('--ant-color-primary')
-    ?.trim()
-  return cssVar || '#E1306C'
-}
-
-const toRgba = (hexOrRgb, alpha = 1) => {
-  const clamp = (n) => Math.max(0, Math.min(255, n))
-  if (!hexOrRgb) return `rgba(225, 48, 108, ${alpha})` // fallback #E1306C
-  const s = hexOrRgb.replace(/\s+/g, '')
-  if (s.startsWith('rgb')) {
-    const nums = s
-      .replace(/rgba?\(/, '')
-      .replace(/\)/, '')
-      .split(',')
-      .slice(0, 3)
-      .map((v) => clamp(parseInt(v, 10) || 0))
-    return `rgba(${nums[0]}, ${nums[1]}, ${nums[2]}, ${alpha})`
-  }
-  // hex (#rgb or #rrggbb)
-  let r = 225,
-    g = 48,
-    b = 108 // default #E1306C
-  const m = s.match(/^#?([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$/)
-  if (m) {
-    const h = m[1]
-    if (h.length === 3) {
-      r = parseInt(h[0] + h[0], 16)
-      g = parseInt(h[1] + h[1], 16)
-      b = parseInt(h[2] + h[2], 16)
-    } else {
-      r = parseInt(h.slice(0, 2), 16)
-      g = parseInt(h.slice(2, 4), 16)
-      b = parseInt(h.slice(4, 6), 16)
-    }
-  }
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-// Columns: "Last seen" inline in Issue column; Assignee is a dropdown; Trend is wider
 const columns = [
-  { title: 'Issue', dataIndex: ['event', 'message'], key: 'message', width: '45%' },
-  {
-    title: 'Events',
-    dataIndex: ['group', 'eventCount'],
-    key: 'count',
-    width: '10%',
-    align: 'center',
-  },
-  { title: 'Assignee', dataIndex: ['group', 'assignee'], key: 'assignee', width: '14%' },
-  { title: 'Trend', dataIndex: 'last7Days', key: 'trend', width: '21%', align: 'center' },
+  { title: 'Issue', dataIndex: 'message', key: 'message', width: '38%' },
+  { title: 'Events', dataIndex: 'eventCount', key: 'count', width: '10%', align: 'center' },
+  { title: 'Age', dataIndex: 'age', key: 'age', width: '8%', align: 'center' },
+  { title: 'Assignee', dataIndex: 'assignee', key: 'assignee', width: '14%' },
+  { title: 'Trend', dataIndex: 'issueCountReport', key: 'trend', width: '20%', align: 'center' },
   { title: '', key: 'actions', width: '10%', align: 'center' },
 ]
 
-// Filters/search on raw events
-const filteredEvents = computed(() => {
-  let list = events.value
+const projectOptions = computed(() => projects.value.map((p) => ({ label: p.name, value: p.id })))
+const hasActiveFilters = computed(() => !!(searchText.value || projectFilter.value))
+const totalIssues = computed(() => issues.value.length)
 
+const filteredIssues = computed(() => {
+  let list = issues.value
   if (searchText.value) {
     const s = searchText.value.toLowerCase()
-    list = list.filter((row) => {
-      const msg = row.event?.message?.toLowerCase() || ''
-      const proj = row.project?.name?.toLowerCase() || ''
-      const email = row.group?.assignee?.email?.toLowerCase() || ''
-      return msg.includes(s) || proj.includes(s) || email.includes(s)
+    list = list.filter((r) => {
+      const assigneeText =
+        typeof r.assignee === 'string' ? r.assignee : r.assignee?.email || r.assignee?.name || ''
+      return (
+        r.message?.toLowerCase().includes(s) ||
+        r.project?.name?.toLowerCase().includes(s) ||
+        assigneeText.toLowerCase().includes(s)
+      )
     })
   }
-
-  if (statusFilter.value) list = list.filter((row) => row.group?.status === statusFilter.value)
-  if (projectFilter.value) list = list.filter((row) => row.project?.id === projectFilter.value)
-
+  if (projectFilter.value) list = list.filter((r) => r.project?.id === projectFilter.value)
   return list
 })
 
-const unresolvedCount = computed(
-  () => events.value.filter((row) => row.group?.status === 'unresolved').length,
-)
-
-const projectOptions = computed(() => projects.value.map((p) => ({ label: p.name, value: p.id })))
-const hasActiveFilters = computed(
-  () => !!(searchText.value || statusFilter.value || projectFilter.value),
-)
-
 const rowSelection = {
-  selectedRowKeys: selectedRowKeys,
+  selectedRowKeys,
   onChange: (keys) => (selectedRowKeys.value = keys),
 }
 
 const loadProjects = async () => {
   try {
     projects.value = await projectListAPI()
-  } catch {
-    /* non-fatal */
-  }
+  } catch {}
 }
-
-const loadEvents = async () => {
+const loadIssues = async () => {
   try {
-    events.value = await eventIssuesAPI()
+    issues.value = await eventIssuesAPI()
   } catch {
-    message.error('Failed to load events')
+    message.error('Failed to load issues')
   }
 }
 
-const copyIssueLink = (eventId) => {
-  const link = `${window.location.origin}/issues/${eventId}`
+const copyIssueLink = (id) => {
+  const link = `${window.location.origin}/issues/${id}`
   navigator.clipboard
     .writeText(link)
-    .then(() => message.success('Issue link copied to clipboard'))
-    .catch(() => message.error('Failed to copy link'))
+    .then(() => message.success('Issue link copied'))
+    .catch(() => message.error('Copy failed'))
 }
 
 const clearFilters = () => {
   searchText.value = ''
-  statusFilter.value = null
   projectFilter.value = null
 }
 
 const formatTimestamp = (ts) => {
   if (!ts || ts === '0001-01-01T00:00:00Z') return 'Just now'
-  const date = new Date(ts)
-  const now = new Date()
-  const diff = now - date
-  const m = Math.floor(diff / 60000)
-  const h = Math.floor(diff / 3600000)
-  const d = Math.floor(diff / 86400000)
+  const d = new Date(ts),
+    n = new Date(),
+    diff = n - d
+  const m = Math.floor(diff / 60000),
+    h = Math.floor(diff / 3600000),
+    day = Math.floor(diff / 86400000)
+  if (m < 1) return 'Just now'
   if (m < 60) return `${m}m ago`
   if (h < 24) return `${h}h ago`
-  if (d < 7) return `${d}d ago`
-  return date.toLocaleDateString('en-US', {
+  if (day < 7) return `${day}d ago`
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    year: d.getFullYear() !== n.getFullYear() ? 'numeric' : undefined,
   })
 }
 
-/** Trend charts — now use your primary color */
-const renderTrendChart = (canvasId, last7Days) => {
-  if (!last7Days?.length) return
+const formatAge = (sec) => {
+  const s = Number(sec)
+  if (!Number.isFinite(s) || s < 0) return '-'
+  const days = Math.floor(s / 86400)
+  const hours = Math.floor((s % 86400) / 3600)
+  const minutes = Math.floor((s % 3600) / 60)
+  const seconds = Math.floor(s % 60)
+  const parts = []
+  if (days) parts.push(`${days}d`)
+  if (hours) parts.push(`${hours}h`)
+  if (minutes && parts.length < 2) parts.push(`${minutes}m`)
+  if (!parts.length) parts.push(`${seconds}s`)
+  return parts.slice(0, 2).join(' ')
+}
 
-  if (chartInstances.value[canvasId]) {
-    chartInstances.value[canvasId].destroy()
-  }
+/** Trend chart — use backend order directly */
+const renderTrendChart = (canvasId, issueCountReport) => {
+  if (!issueCountReport?.length) return
+  if (chartInstances.value[canvasId]) chartInstances.value[canvasId].destroy()
 
   nextTick(() => {
-    const canvas = document.getElementById(canvasId)
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-
-    const labels = last7Days.map((d) =>
-      new Date(d.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    const el = document.getElementById(canvasId)
+    if (!el) return
+    const ctx = el.getContext('2d')
+    const labels = issueCountReport.map((d) =>
+      new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     )
-    const counts = last7Days.map((d) => d.count)
-
-    const primary = getPrimaryColor()
+    const data = issueCountReport.map((d) => d.eventCount || 0)
+    const primary =
+      getComputedStyle(document.documentElement).getPropertyValue('--ant-color-primary')?.trim() ||
+      '#1677ff'
 
     chartInstances.value[canvasId] = new Chart(ctx, {
       type: 'line',
@@ -201,9 +135,9 @@ const renderTrendChart = (canvasId, last7Days) => {
         datasets: [
           {
             label: 'Events',
-            data: counts,
+            data,
             borderColor: primary,
-            backgroundColor: toRgba(primary, 0.12),
+            backgroundColor: 'rgba(22, 119, 255, 0.2)',
             borderWidth: 2,
             fill: true,
             tension: 0.4,
@@ -216,87 +150,75 @@ const renderTrendChart = (canvasId, last7Days) => {
         maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: { enabled: true } },
         scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
-        elements: { line: { capBezierPoints: true } },
       },
     })
   })
 }
-
-const renderAllCharts = () => {
-  nextTick(() => {
-    filteredEvents.value.forEach((row) => {
-      if (row.last7Days?.length) renderTrendChart(`trend-${row.event?.id}`, row.last7Days)
-    })
-  })
-}
-
-watch(filteredEvents, () => renderAllCharts())
+const renderAllCharts = () =>
+  nextTick(() =>
+    filteredIssues.value.forEach(
+      (r) => r.issueCountReport?.length && renderTrendChart(`trend-${r.id}`, r.issueCountReport),
+    ),
+  )
+watch(filteredIssues, renderAllCharts)
 
 onMounted(async () => {
   await loadProjects()
-  await loadEvents()
+  await loadIssues()
   renderAllCharts()
 })
 
-/** bulk actions (demo toasts only) */
-const handleResolve = () => {
-  if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
-  message.success(`Resolved ${selectedRowKeys.value.length} issue(s)`)
-  selectedRowKeys.value = []
+/** demo bulk actions */
+const requireSelection = (fnName) => {
+  if (!selectedRowKeys.value.length) {
+    message.warning('Please select at least one issue')
+    return false
+  }
+  return true
 }
-const handleArchive = () => {
-  if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
-  message.success(`Archived ${selectedRowKeys.value.length} issue(s)`)
-  selectedRowKeys.value = []
-}
-const handleDelete = () => {
-  if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
-  message.success(`Deleted ${selectedRowKeys.value.length} issue(s)`)
-  selectedRowKeys.value = []
-}
-const handleExport = () => {
-  if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
-  message.success(`Exported ${selectedRowKeys.value.length} issue(s)`)
-}
-const handleMute = () => {
-  if (!selectedRowKeys.value.length) return message.warning('Please select at least one issue')
-  message.success(`Muted ${selectedRowKeys.value.length} issue(s)`)
-  selectedRowKeys.value = []
-}
+const handleResolve = () =>
+  requireSelection() &&
+  (message.success(`Resolved ${selectedRowKeys.value.length} issue(s)`),
+  (selectedRowKeys.value = []))
+const handleArchive = () =>
+  requireSelection() &&
+  (message.success(`Archived ${selectedRowKeys.value.length} issue(s)`),
+  (selectedRowKeys.value = []))
+const handleDelete = () =>
+  requireSelection() &&
+  (message.success(`Deleted ${selectedRowKeys.value.length} issue(s)`),
+  (selectedRowKeys.value = []))
+const handleExport = () =>
+  requireSelection() && message.success(`Exported ${selectedRowKeys.value.length} issue(s)`)
+const handleMute = () =>
+  requireSelection() &&
+  (message.success(`Muted ${selectedRowKeys.value.length} issue(s)`), (selectedRowKeys.value = []))
 </script>
 
 <template>
   <main class="issue-tracker">
-    <!-- Fixed header with actions on the right -->
     <div class="header">
       <div class="header-left">
         <a-typography-title :level="3" style="margin: 0">Issues</a-typography-title>
-        <a-badge :count="unresolvedCount" :number-style="{ backgroundColor: '#f5222d' }" />
+        <a-badge :count="totalIssues" :number-style="{ backgroundColor: '#2f54eb' }" />
       </div>
-
       <div class="header-actions">
         <a-space>
-          <a-button type="primary" :disabled="!selectedRowKeys.length" @click="handleResolve">
-            <template #icon><CheckCircleOutlined /></template>Resolve
-          </a-button>
-          <a-button :disabled="!selectedRowKeys.length" @click="handleArchive">
-            <template #icon><InboxOutlined /></template>Archive
-          </a-button>
-          <a-button :disabled="!selectedRowKeys.length" @click="handleMute">
-            <template #icon><SoundOutlined /></template>Mute
-          </a-button>
+          <a-button type="primary" :disabled="!selectedRowKeys.length" @click="handleResolve"
+            >Resolve</a-button
+          >
+          <a-button :disabled="!selectedRowKeys.length" @click="handleArchive">Archive</a-button>
+          <a-button :disabled="!selectedRowKeys.length" @click="handleMute">Mute</a-button>
           <a-dropdown>
-            <a-button :disabled="!selectedRowKeys.length">
-              <template #icon><MoreOutlined /></template>More actions
-            </a-button>
+            <a-button :disabled="!selectedRowKeys.length">More actions</a-button>
             <template #overlay>
               <a-menu>
-                <a-menu-item key="delete" @click="handleDelete" :disabled="!selectedRowKeys.length">
-                  <DeleteOutlined />Delete
-                </a-menu-item>
-                <a-menu-item key="export" @click="handleExport" :disabled="!selectedRowKeys.length">
-                  <ExportOutlined />Export
-                </a-menu-item>
+                <a-menu-item key="delete" :disabled="!selectedRowKeys.length" @click="handleDelete"
+                  >Delete</a-menu-item
+                >
+                <a-menu-item key="export" :disabled="!selectedRowKeys.length" @click="handleExport"
+                  >Export</a-menu-item
+                >
               </a-menu>
             </template>
           </a-dropdown>
@@ -309,12 +231,11 @@ const handleMute = () => {
         size="small"
         :pagination="false"
         :columns="columns"
-        :data-source="filteredEvents"
+        :data-source="filteredIssues"
         :row-selection="rowSelection"
-        :row-key="(record) => record.event?.id"
+        :row-key="(r) => r.id"
       >
         <template #title>
-          <!-- Filters only -->
           <div class="table-header-filters">
             <div class="filters-left">
               <a-input
@@ -325,18 +246,6 @@ const handleMute = () => {
               >
                 <template #prefix><Search :size="16" /></template>
               </a-input>
-
-              <a-select
-                v-model:value="statusFilter"
-                placeholder="All Statuses"
-                style="width: 150px"
-                allow-clear
-              >
-                <a-select-option value="unresolved">Unresolved</a-select-option>
-                <a-select-option value="resolved">Resolved</a-select-option>
-                <a-select-option value="archived">Archived</a-select-option>
-              </a-select>
-
               <a-select
                 v-model:value="projectFilter"
                 placeholder="All Projects"
@@ -344,89 +253,91 @@ const handleMute = () => {
                 allow-clear
                 :options="projectOptions"
               />
-
-              <a-button @click="clearFilters" v-if="hasActiveFilters">
-                <template #icon><FilterOutlined /></template>Clear
-              </a-button>
+              <a-button v-if="hasActiveFilters" @click="clearFilters">Clear</a-button>
             </div>
           </div>
         </template>
 
         <template #bodyCell="{ column, record }">
-          <!-- Issue cell: title + meta; includes Last Seen inline -->
+          <!-- Issue -->
           <template v-if="column.key === 'message'">
             <div class="issue-cell">
               <div class="issue-content">
-                <a-typography-link class="issue-title" href="#">
-                  {{ record.event?.message }}
-                </a-typography-link>
+                <a-typography-link class="issue-title" href="#">{{
+                  record.message
+                }}</a-typography-link>
 
                 <div class="issue-meta">
-                  <span class="project-name">{{ record.project?.name || 'Unknown' }}</span>
+                  <a-typography-text strong>{{
+                    record.project?.name || 'Unknown'
+                  }}</a-typography-text>
                   <span class="meta-separator">|</span>
-                  <span class="issue-type-text">{{ record.event?.type }}</span>
+                  <span class="issue-type-text">{{ record.type }}</span>
                   <span class="meta-separator">|</span>
-                  <span class="last-seen"
-                    >Last seen {{ formatTimestamp(record.event?.timestamp) }}</span
-                  >
+                  <span class="last-seen">Last seen {{ formatTimestamp(record.timestamp) }}</span>
                 </div>
 
-                <div v-if="record.event?.stacktraceFirst" class="stacktrace-preview">
-                  <span class="stacktrace-function">{{
-                    record.event.stacktraceFirst.function
-                  }}</span>
+                <div v-if="record.firstStackTrace" class="stacktrace-preview">
+                  <span class="stacktrace-function">{{ record.firstStackTrace.function }}</span>
                   <span class="stacktrace-separator">in</span>
-                  <span class="stacktrace-file">{{ record.event.stacktraceFirst.file }}</span>
+                  <span class="stacktrace-file">{{ record.firstStackTrace.file }}</span>
                   <span class="stacktrace-separator">at line</span>
-                  <span class="stacktrace-line">{{ record.event.stacktraceFirst.line }}</span>
+                  <span class="stacktrace-line">{{ record.firstStackTrace.line }}</span>
                 </div>
               </div>
             </div>
           </template>
 
-          <!-- counts -->
+          <!-- Count -->
           <template v-if="column.key === 'count'">
             <a-badge
-              :count="record.group?.eventCount || 0"
+              :count="record.eventCount || 0"
               :overflow-count="999"
               :number-style="{ backgroundColor: '#f0f0f0', color: '#595959', fontWeight: 600 }"
             />
           </template>
 
-          <!-- assignee: dropdown (empty options for now) -->
+          <!-- Age (formatted from seconds) -->
+          <template v-if="column.key === 'age'">
+            <a-typography-text strong>{{ formatAge(record.age) }}</a-typography-text>
+          </template>
+
+          <!-- Assignee -->
           <template v-if="column.key === 'assignee'">
             <a-select
               :options="[]"
+              :value="
+                record.assignee?.email || record.assignee?.name || record.assignee || undefined
+              "
               placeholder="Select assignee"
               style="width: 160px"
               allow-clear
             />
           </template>
 
-          <!-- trend (LINE spark) -->
+          <!-- Trend -->
           <template v-if="column.key === 'trend'">
-            <div v-if="record.last7Days?.length" class="trend-chart-container">
-              <canvas :id="`trend-${record.event?.id}`" class="trend-chart"></canvas>
+            <div v-if="record.issueCountReport?.length" class="trend-chart-container">
+              <canvas :id="`trend-${record.id}`" class="trend-chart"></canvas>
             </div>
             <div v-else class="trend-placeholder">
               <TrendingUp :size="16" style="color: #d9d9d9" />
             </div>
           </template>
 
-          <!-- row actions: dropdown only; copy moved inside menu -->
+          <!-- Actions -->
           <template v-if="column.key === 'actions'">
             <a-dropdown placement="bottomRight" :trigger="['click']">
-              <a-button type="text" size="small" aria-label="More actions">
-                <template #icon><MoreOutlined style="font-size: 16px" /></template>
+              <a-button type="text" size="small" shape="circle" aria-label="More actions">
+                <MoreVertical :size="16" />
               </a-button>
               <template #overlay>
                 <a-menu>
-                  <a-menu-item key="copy" @click="copyIssueLink(record.event?.id)">
-                    <ExportOutlined /> Copy Issue Link
-                  </a-menu-item>
-                  <a-menu-item key="jira"> <MoreOutlined /> Create Jira Ticket </a-menu-item>
-                  <a-menu-item key="email"> <MoreOutlined /> Send Email </a-menu-item>
-                  <a-menu-item key="custom"> <MoreOutlined /> Custom Action </a-menu-item>
+                  <a-menu-item key="copy" @click="copyIssueLink(record.id)"
+                    >Copy Issue Link</a-menu-item
+                  >
+                  <a-menu-item key="jira">Create Jira Ticket</a-menu-item>
+                  <a-menu-item key="email">Send Email</a-menu-item>
                 </a-menu>
               </template>
             </a-dropdown>
@@ -438,16 +349,13 @@ const handleMute = () => {
 </template>
 
 <style scoped>
-/* page fills the app-content area */
 .issue-tracker {
   height: 100%;
+  min-height: 98vh;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   background: #fff;
 }
-
-/* Fixed header */
 .header {
   position: sticky;
   top: 0;
@@ -460,27 +368,46 @@ const handleMute = () => {
   background: #fff;
   border-bottom: 1px solid #f0f0f0;
 }
-
 .header-left {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.header-actions :deep(.ant-btn + .ant-btn) {
-  margin-left: 8px;
+/* make the header count badge use your brand color */
+:deep(.header-left .ant-badge .ant-badge-count) {
+  background: #e1306c !important;
 }
 
-/* inner scroller (everything below header) */
 .table-container {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   padding: 0 24px 24px;
-  border-radius: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* sticky toolbar inside scroller (filters) */
+/* Make table always take the available height */
+:deep(.ant-table-wrapper),
+:deep(.ant-spin-nested-loading),
+:deep(.ant-spin-container),
+:deep(.ant-table),
+:deep(.ant-table-container) {
+  height: 100%;
+}
+:deep(.ant-table) {
+  display: flex;
+  flex-direction: column;
+}
+:deep(.ant-table-container) {
+  flex: 1 1 auto;
+}
+:deep(.ant-table-body),
+:deep(.ant-table-content) {
+  max-height: none !important;
+}
+
 .table-header-filters {
   position: sticky;
   top: 0;
@@ -489,7 +416,6 @@ const handleMute = () => {
   border-bottom: 1px solid #f0f0f0;
   padding: 12px 16px;
 }
-
 .filters-left {
   display: flex;
   gap: 12px;
@@ -497,30 +423,31 @@ const handleMute = () => {
   align-items: center;
 }
 
-.selected-count {
-  font-weight: 600;
-  color: var(--ant-color-primary);
-}
-
 .issue-cell {
   display: flex;
   gap: 12px;
   align-items: flex-start;
 }
-
 .issue-content {
   flex: 1;
   min-width: 0;
 }
 
 .issue-title {
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 4px;
-  word-break: break-word;
-  color: #262626;
+  color: #1f1f1f;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease,
+    text-decoration-color 0.15s ease;
+  text-decoration: none;
 }
 .issue-title:hover {
-  color: var(--ant-color-primary);
+  color: #e1306c;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transform: translateY(-1px);
 }
 
 .issue-meta {
@@ -531,34 +458,29 @@ const handleMute = () => {
   flex-wrap: wrap;
 }
 
-.last-seen {
-  color: #8c8c8c;
-}
-
-.project-name {
-  color: var(--ant-color-primary);
-  font-weight: 500;
-  font-size: 12px;
-}
 .meta-separator {
   color: #d9d9d9;
   margin: 0 2px;
 }
 .issue-type-text {
   color: #8c8c8c;
-  font-size: 12px;
   text-transform: capitalize;
+}
+.last-seen {
+  color: #8c8c8c;
 }
 
 .stacktrace-preview {
   margin-top: 6px;
   font-size: 11px;
   color: #8c8c8c;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
   line-height: 1.4;
   padding: 4px 8px;
   background: #fafafa;
-  border-radius: 3px;
+  border-radius: 4px;
   border-left: 2px solid #e8e8e8;
   white-space: nowrap;
   overflow: hidden;
@@ -566,7 +488,7 @@ const handleMute = () => {
 }
 .stacktrace-function {
   color: #722ed1;
-  font-weight: 500;
+  font-weight: 600;
 }
 .stacktrace-separator {
   color: #bfbfbf;
@@ -576,16 +498,11 @@ const handleMute = () => {
   color: #595959;
 }
 .stacktrace-line {
-  color: var(--ant-color-primary);
-  font-weight: 500;
+  color: #e1306c;
+  font-weight: 600;
 }
 
-.assignee-cell {
-  display: flex;
-  align-items: center;
-}
-
-/* trend chart (line) */
+/* charts */
 .trend-chart-container {
   display: flex;
   justify-content: center;
@@ -605,9 +522,6 @@ const handleMute = () => {
 :deep(.ant-table-thead > tr > th) {
   background: #fafafa;
   font-weight: 600;
-}
-:deep(.ant-table-tbody > tr:hover) {
-  cursor: pointer;
 }
 :deep(.ant-table-title) {
   padding: 0 !important;

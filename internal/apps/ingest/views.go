@@ -17,7 +17,7 @@ func (v *IngestContext) NewEvent(c echo.Context) error {
 		utils.RespondFail(c, http.StatusBadRequest, "Failed", nil)
 	}
 
-	for _, frame := range event.StackTrace {
+	for _, frame := range event.Properties.Stacktrace {
 		fmt.Printf("     ↳ %s (%s:%d)\n", frame.Function, frame.File, frame.Line)
 	}
 

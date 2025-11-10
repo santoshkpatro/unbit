@@ -7,8 +7,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 	"github.com/santoshkpatro/unbit/internal/apps/auth"
-	"github.com/santoshkpatro/unbit/internal/apps/events"
 	"github.com/santoshkpatro/unbit/internal/apps/ingest"
+	"github.com/santoshkpatro/unbit/internal/apps/issues"
 	"github.com/santoshkpatro/unbit/internal/apps/projects"
 	"github.com/santoshkpatro/unbit/internal/apps/setting"
 )
@@ -49,9 +49,9 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	api.POST("/projects", projectContext.ProjectCreateView)
 
 	// Issues routes
-	eventsContext := &events.EventContext{
+	issueContext := &issues.IssueContext{
 		DB:    db,
 		Cache: cache,
 	}
-	api.GET("/events/issues", eventsContext.EventIssues)
+	api.GET("/issues/recent", issueContext.RecentIssueListView)
 }

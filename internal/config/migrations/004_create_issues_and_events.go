@@ -12,7 +12,7 @@ func init() {
 		Version: 4,
 		Up: func(ctx context.Context, tx *sqlx.Tx) error {
 			_, err := tx.ExecContext(ctx, `
-				CREATE TABLE IF NOT EXISTS groups (
+				CREATE TABLE IF NOT EXISTS issues (
 					id TEXT PRIMARY KEY,
 					project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 					fingerprint TEXT NOT NULL,
@@ -22,23 +22,22 @@ func init() {
 					created_at TIMESTAMPTZ DEFAULT NOW(),
 					updated_at TIMESTAMPTZ DEFAULT NOW()
 				);
-				CREATE INDEX IF NOT EXISTS idx_groups_project_id ON groups(project_id);
-				CREATE UNIQUE INDEX IF NOT EXISTS idx_groups_project_fingerprint ON groups(project_id, fingerprint);
+				CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issues(project_id);
+				CREATE INDEX IF NOT EXISTS idx_issues_assignee_id ON issues(assignee_id);
+				CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_project_fingerprint ON issues(project_id, fingerprint);
 
 				CREATE TABLE IF NOT EXISTS events (
 					id TEXT PRIMARY KEY,
 					project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-					group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-					type TEXT NOT NULL,
-					message TEXT NOT NULL,
-					level TEXT NOT NULL,
+					issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
 					timestamp TIMESTAMPTZ NOT NULL,
-					stacktrace JSONB,
 					properties JSONB,
+					event_type TEXT,
 					created_at TIMESTAMPTZ DEFAULT NOW(),
 					updated_at TIMESTAMPTZ DEFAULT NOW()
 				);
-				CREATE INDEX IF NOT EXISTS idx_events_group_id ON events(group_id);
+				CREATE INDEX IF NOT EXISTS idx_events_issue_id ON events(issue_id);
 				CREATE INDEX IF NOT EXISTS idx_events_project_id ON events(project_id);
 			`)
 			if err != nil {
@@ -50,7 +49,7 @@ func init() {
 		Down: func(ctx context.Context, tx *sqlx.Tx) error {
 			_, err := tx.ExecContext(ctx, `
 				DROP TABLE IF EXISTS events;
-				DROP TABLE IF EXISTS groups;
+				DROP TABLE IF EXISTS issues;
 			`)
 			if err != nil {
 				return fmt.Errorf("failed to revert migration version: %w", err)
