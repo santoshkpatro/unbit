@@ -2,6 +2,7 @@ package issues
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/santoshkpatro/unbit/internal/utils"
@@ -9,7 +10,24 @@ import (
 
 func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 	userID, _ := utils.CheckAuthentication(c)
-	query := `
+	var params []interface{}
+	params = append(params, userID) // $1
+
+	var extraWhere []string
+
+	// optional param
+	projectID := c.QueryParam("project_id")
+	if projectID != "" {
+		extraWhere = append(extraWhere, fmt.Sprintf("p.id = $%d", len(params)+1))
+		params = append(params, projectID)
+	}
+
+	where := ""
+	if len(extraWhere) > 0 {
+		where = " AND (" + strings.Join(extraWhere, " AND ") + ")"
+	}
+
+	query := fmt.Sprintf(`
 		WITH
 			days AS (
 				SELECT
@@ -46,6 +64,7 @@ func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 						WHERE
 							user_id = $1
 					)
+					%s
 				ORDER BY
 					e.issue_id,
 					e.timestamp DESC
@@ -109,9 +128,9 @@ func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 			ri.age
 		ORDER BY
 			ri.timestamp DESC;
-	`
+	`, where)
 	var rows []issueRow
-	err := v.DB.Select(&rows, query, userID)
+	err := v.DB.Select(&rows, query, params...)
 	if err != nil {
 		return utils.RespondFail(c, 500, "Failed to fetch issues", err)
 	}

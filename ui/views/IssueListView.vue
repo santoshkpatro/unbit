@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, computed, nextTick, watch } from 'vue'
+import { onMounted, ref, watch, nextTick, computed } from 'vue'
 import { eventIssuesAPI } from '@/api/events'
 import { projectListAPI } from '@/api/projects'
 import { Search, TrendingUp, MoreVertical } from 'lucide-vue-next'
@@ -7,7 +7,6 @@ import { message } from 'ant-design-vue'
 import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
 
-/** API: [{ id, eventId, eventCount, timestamp, message, level, type, assignee, age, project:{id,name}, issueCountReport:[{date,eventCount}], firstStackTrace:{function,file,line,code} }] */
 const issues = ref([])
 const projects = ref([])
 const selectedRowKeys = ref([])
@@ -24,27 +23,7 @@ const columns = [
   { title: '', key: 'actions', width: '10%', align: 'center' },
 ]
 
-const projectOptions = computed(() => projects.value.map((p) => ({ label: p.name, value: p.id })))
-const hasActiveFilters = computed(() => !!(searchText.value || projectFilter.value))
 const totalIssues = computed(() => issues.value.length)
-
-const filteredIssues = computed(() => {
-  let list = issues.value
-  if (searchText.value) {
-    const s = searchText.value.toLowerCase()
-    list = list.filter((r) => {
-      const assigneeText =
-        typeof r.assignee === 'string' ? r.assignee : r.assignee?.email || r.assignee?.name || ''
-      return (
-        r.message?.toLowerCase().includes(s) ||
-        r.project?.name?.toLowerCase().includes(s) ||
-        assigneeText.toLowerCase().includes(s)
-      )
-    })
-  }
-  if (projectFilter.value) list = list.filter((r) => r.project?.id === projectFilter.value)
-  return list
-})
 
 const rowSelection = {
   selectedRowKeys,
@@ -52,16 +31,17 @@ const rowSelection = {
 }
 
 const loadProjects = async () => {
-  try {
-    projects.value = await projectListAPI()
-  } catch {}
+  projects.value = await projectListAPI()
 }
+
 const loadIssues = async () => {
-  try {
-    issues.value = await eventIssuesAPI()
-  } catch {
-    message.error('Failed to load issues')
+  const params = {}
+
+  if (projectFilter.value) {
+    params.project_id = projectFilter.value
   }
+
+  issues.value = await eventIssuesAPI(params)
 }
 
 const copyIssueLink = (id) => {
@@ -75,16 +55,21 @@ const copyIssueLink = (id) => {
 const clearFilters = () => {
   searchText.value = ''
   projectFilter.value = null
+  loadIssues()
 }
+
+watch(projectFilter, () => {
+  loadIssues()
+})
 
 const formatTimestamp = (ts) => {
   if (!ts || ts === '0001-01-01T00:00:00Z') return 'Just now'
-  const d = new Date(ts),
-    n = new Date(),
-    diff = n - d
-  const m = Math.floor(diff / 60000),
-    h = Math.floor(diff / 3600000),
-    day = Math.floor(diff / 86400000)
+  const d = new Date(ts)
+  const n = new Date()
+  const diff = n - d
+  const m = Math.floor(diff / 60000)
+  const h = Math.floor(diff / 3600000)
+  const day = Math.floor(diff / 86400000)
   if (m < 1) return 'Just now'
   if (m < 60) return `${m}m ago`
   if (h < 24) return `${h}h ago`
@@ -111,7 +96,6 @@ const formatAge = (sec) => {
   return parts.slice(0, 2).join(' ')
 }
 
-/** Trend chart — use backend order directly */
 const renderTrendChart = (canvasId, issueCountReport) => {
   if (!issueCountReport?.length) return
   if (chartInstances.value[canvasId]) chartInstances.value[canvasId].destroy()
@@ -154,21 +138,21 @@ const renderTrendChart = (canvasId, issueCountReport) => {
     })
   })
 }
+
 const renderAllCharts = () =>
   nextTick(() =>
-    filteredIssues.value.forEach(
+    issues.value.forEach(
       (r) => r.issueCountReport?.length && renderTrendChart(`trend-${r.id}`, r.issueCountReport),
     ),
   )
-watch(filteredIssues, renderAllCharts)
+
+watch(issues, renderAllCharts)
 
 onMounted(async () => {
   await loadProjects()
   await loadIssues()
-  renderAllCharts()
 })
 
-/** demo bulk actions */
 const requireSelection = (fnName) => {
   if (!selectedRowKeys.value.length) {
     message.warning('Please select at least one issue')
@@ -176,20 +160,25 @@ const requireSelection = (fnName) => {
   }
   return true
 }
+
 const handleResolve = () =>
   requireSelection() &&
   (message.success(`Resolved ${selectedRowKeys.value.length} issue(s)`),
   (selectedRowKeys.value = []))
+
 const handleArchive = () =>
   requireSelection() &&
   (message.success(`Archived ${selectedRowKeys.value.length} issue(s)`),
   (selectedRowKeys.value = []))
+
 const handleDelete = () =>
   requireSelection() &&
   (message.success(`Deleted ${selectedRowKeys.value.length} issue(s)`),
   (selectedRowKeys.value = []))
+
 const handleExport = () =>
   requireSelection() && message.success(`Exported ${selectedRowKeys.value.length} issue(s)`)
+
 const handleMute = () =>
   requireSelection() &&
   (message.success(`Muted ${selectedRowKeys.value.length} issue(s)`), (selectedRowKeys.value = []))
@@ -231,7 +220,7 @@ const handleMute = () =>
         size="small"
         :pagination="false"
         :columns="columns"
-        :data-source="filteredIssues"
+        :data-source="issues"
         :row-selection="rowSelection"
         :row-key="(r) => r.id"
       >
@@ -248,11 +237,15 @@ const handleMute = () =>
               </a-input>
               <a-select
                 v-model:value="projectFilter"
-                placeholder="All Projects"
                 style="width: 180px"
+                placeholder="All projects"
                 allow-clear
-                :options="projectOptions"
-              />
+              >
+                <a-select-option :value="null">All projects</a-select-option>
+                <a-select-option v-for="p in projects" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </a-select-option>
+              </a-select>
               <a-button v-if="hasActiveFilters" @click="clearFilters">Clear</a-button>
             </div>
           </div>
@@ -299,7 +292,7 @@ const handleMute = () =>
 
           <!-- Age (formatted from seconds) -->
           <template v-if="column.key === 'age'">
-            <a-typography-text strong>{{ formatAge(record.age) }}</a-typography-text>
+            <a-typography-text>{{ formatAge(record.age) }}</a-typography-text>
           </template>
 
           <!-- Assignee -->
