@@ -311,7 +311,7 @@ const shareableEnv = computed(() => {
           <a-col :xs="24" :md="16">
             <a-card :bordered="true">
               <a-tabs default-active-key="stack">
-                <a-tab-pane key="stack" tab="Stactrace">
+                <a-tab-pane key="stack" tab="Stacktrace">
                   <a-collapse accordion>
                     <a-collapse-panel
                       v-for="(frame, i) in stack"
@@ -395,9 +395,8 @@ const shareableEnv = computed(() => {
                             <div class="event-desc">
                               <div class="truncate">{{ item.message }}</div>
                               <div class="weak mono">
-                                {{ dayjs(item.timestamp).format('YYYY-MM-DD HH:mm:ss') }} ({{
-                                  dayjs(item.timestamp).fromNow()
-                                }})
+                                {{ dayjs(item.timestamp).format('YYYY-MM-DD HH:mm:ss') }}
+                                ({{ dayjs(item.timestamp).fromNow() }})
                               </div>
                             </div>
                           </template>
@@ -528,21 +527,19 @@ const shareableEnv = computed(() => {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
 }
 
-/* This is now the main flex container */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  flex-wrap: wrap; /* Actions will stack below on mobile */
+  flex-wrap: wrap;
 }
 .header-left {
   min-width: 0;
 }
 
-/* This is the new container for actions */
 .header-right {
-  flex-shrink: 0; /* Prevents it from being crushed */
+  flex-shrink: 0;
 }
 
 .title {
@@ -552,14 +549,12 @@ const shareableEnv = computed(() => {
   word-break: break-word;
 }
 .actions-inline {
-  /* This rule is fine, it contains the a-space */
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-/* Give the meta line a bit more breathing room from the title */
 .meta-line {
   color: rgba(0, 0, 0, 0.65);
   margin-top: 12px;
@@ -608,7 +603,6 @@ const shareableEnv = computed(() => {
   color: rgba(0, 0, 0, 0.45);
 }
 
-/* Frame header */
 .frame-head {
   display: flex;
   align-items: center;
@@ -616,7 +610,6 @@ const shareableEnv = computed(() => {
   margin-bottom: 8px;
 }
 
-/* Code blocks — match Sentry-like look */
 .code-block {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
@@ -633,7 +626,6 @@ const shareableEnv = computed(() => {
   white-space: pre;
 }
 
-/* Previous events list */
 .event-title {
   display: flex;
   align-items: center;
