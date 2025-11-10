@@ -38,6 +38,7 @@ func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 					ON (e.issue_id) i.id AS issue_id,
 					e.id AS event_id,
 					e.timestamp,
+					i.status,
 					i.event_count,
 					i.assignee_id,
 					u.email AS assignee_email,
@@ -97,6 +98,7 @@ func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 			ri.event_id,
 			ri.event_count,
 			ri.timestamp,
+			ri.status,
 			ri.message,
 			ri.level,
 			ri.type,
@@ -116,6 +118,7 @@ func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 			ri.event_id,
 			ri.event_count,
 			ri.timestamp,
+			ri.status,
 			ri.message,
 			ri.level,
 			ri.type,
@@ -132,6 +135,7 @@ func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 	var rows []issueRow
 	err := v.DB.Select(&rows, query, params...)
 	if err != nil {
+		fmt.Println("err", err)
 		return utils.RespondFail(c, 500, "Failed to fetch issues", err)
 	}
 	issues := make([]Issue, len(rows))
@@ -145,4 +149,66 @@ func (v *IssueContext) RecentIssueListView(c echo.Context) error {
 	}
 
 	return utils.RespondOK(c, issues, "")
+}
+
+func (v *IssueContext) IssueDetailsView(c echo.Context) error {
+	issueID := c.Param("issue_id")
+	userID, _ := utils.CheckAuthentication(c)
+
+	query := `
+		SELECT DISTINCT
+			ON (e.issue_id) i.id,
+			e.id AS event_id,
+			e.timestamp,
+			i.event_count,
+			i.assignee_id,
+			i.status,
+			u.email AS assignee_email,
+			concat_ws(' ', u.first_name, u.last_name) AS assignee_name,
+			p.id AS project_id,
+			p.name AS project_name,
+			e.properties ->> 'message' AS message,
+			e.properties ->> 'type' AS type,
+			e.properties ->> 'level' AS level,
+			e.properties -> 'stacktrace' AS stacktrace,
+			floor(
+				extract(
+					epoch
+					FROM
+						(e.timestamp - i.created_at)
+				)
+			)::int AS age
+		FROM
+			issues i
+			JOIN events e ON i.id = e.issue_id
+			JOIN projects p ON p.id = e.project_id
+			LEFT JOIN users u ON i.assignee_id = u.id
+		WHERE
+			e.event_type = 'issues'
+			AND p.id IN (
+				SELECT
+					project_id
+				FROM
+					project_members
+				WHERE
+					user_id = $1
+			)
+			AND issue_id = $2
+		ORDER BY
+			e.issue_id,
+			e.timestamp DESC
+	`
+	var row issueDetailRow
+	err := v.DB.Get(&row, query, userID, issueID)
+	if err != nil {
+		fmt.Println("err", err)
+		return utils.RespondFail(c, 500, "Failed to fetch issue details", err)
+	}
+
+	issue, err := row.ToIssueDetail()
+	if err != nil {
+		return utils.RespondFail(c, 500, "Failed to parse issue details", err)
+	}
+
+	return utils.RespondOK(c, issue, "")
 }

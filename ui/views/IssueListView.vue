@@ -1,11 +1,14 @@
 <script setup>
 import { onMounted, ref, watch, nextTick, computed } from 'vue'
-import { eventIssuesAPI } from '@/api/events'
+import { useRouter, RouterLink } from 'vue-router'
+import { recentIssuesAPI } from '@/api/issues'
 import { projectListAPI } from '@/api/projects'
 import { Search, TrendingUp, MoreVertical } from 'lucide-vue-next'
 import { message } from 'ant-design-vue'
 import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
+
+const router = useRouter()
 
 const issues = ref([])
 const projects = ref([])
@@ -41,7 +44,7 @@ const loadIssues = async () => {
     params.project_id = projectFilter.value
   }
 
-  issues.value = await eventIssuesAPI(params)
+  issues.value = await recentIssuesAPI(params)
 }
 
 const copyIssueLink = (id) => {
@@ -256,14 +259,17 @@ const handleMute = () =>
           <template v-if="column.key === 'message'">
             <div class="issue-cell">
               <div class="issue-content">
-                <a-typography-link class="issue-title" href="#">{{
-                  record.message
-                }}</a-typography-link>
+                <router-link
+                  class="issue-title"
+                  :to="{ name: 'issue-details', params: { issueId: record.id } }"
+                >
+                  {{ record.message }}
+                </router-link>
 
                 <div class="issue-meta">
-                  <a-typography-text strong>{{
-                    record.project?.name || 'Unknown'
-                  }}</a-typography-text>
+                  <a-typography-text strong>
+                    {{ record.project?.name || 'Unknown' }}
+                  </a-typography-text>
                   <span class="meta-separator">|</span>
                   <span class="issue-type-text">{{ record.type }}</span>
                   <span class="meta-separator">|</span>

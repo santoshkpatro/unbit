@@ -28,11 +28,19 @@ type FirstStackTrace struct {
 	Code     string `json:"code"`
 }
 
+type Stacktrace struct {
+	Function string `json:"function"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Code     string `json:"code"`
+}
+
 type Issue struct {
 	ID              string             `json:"id"`
 	EventID         string             `json:"eventId"`
 	EventCount      int                `json:"eventCount"`
 	Timestamp       time.Time          `json:"timestamp"`
+	Status          string             `json:"status"`
 	Message         string             `json:"message"`
 	Level           string             `json:"level"`
 	Type            string             `json:"type"`
@@ -43,11 +51,27 @@ type Issue struct {
 	Age             int                `json:"age"`
 }
 
+type IssueDetail struct {
+	ID         string       `json:"id"`
+	EventID    string       `json:"eventId"`
+	EventCount int          `json:"eventCount"`
+	Timestamp  time.Time    `json:"timestamp"`
+	Status     string       `json:"status"`
+	Message    string       `json:"message"`
+	Level      string       `json:"level"`
+	Type       string       `json:"type"`
+	Assignee   *Assignee    `json:"assignee"`
+	Project    Project      `json:"project"`
+	Stacktrace []Stacktrace `json:"stacktrace"`
+	Age        int          `json:"age"`
+}
+
 type issueRow struct {
 	ID               string          `db:"id"`
 	EventID          string          `db:"event_id"`
 	EventCount       int             `db:"event_count"`
 	Timestamp        time.Time       `db:"timestamp"`
+	Status           string          `db:"status"`
 	Message          string          `db:"message"`
 	Level            string          `db:"level"`
 	Type             string          `db:"type"`
@@ -59,6 +83,25 @@ type issueRow struct {
 	ProjectName      string          `db:"project_name"`
 	IssueCountReport json.RawMessage `db:"issue_count_report"`
 	Age              int             `db:"age"`
+}
+
+type issueDetailRow struct {
+	ID               string          `db:"id"`
+	EventID          string          `db:"event_id"`
+	EventCount       int             `db:"event_count"`
+	Timestamp        time.Time       `db:"timestamp"`
+	Status           string          `db:"status"`
+	Message          string          `db:"message"`
+	Level            string          `db:"level"`
+	Type             string          `db:"type"`
+	AssigneeID       *string         `db:"assignee_id"`
+	AssigneeName     *string         `db:"assignee_name"`
+	AssigneeEmail    *string         `db:"assignee_email"`
+	ProjectID        string          `db:"project_id"`
+	ProjectName      string          `db:"project_name"`
+	IssueCountReport json.RawMessage `db:"issue_count_report"`
+	Age              int             `db:"age"`
+	Stacktrace       json.RawMessage `db:"stacktrace"`
 }
 
 func (ir *issueRow) ToIssue() (Issue, error) {
@@ -88,6 +131,7 @@ func (ir *issueRow) ToIssue() (Issue, error) {
 		EventID:    ir.EventID,
 		EventCount: ir.EventCount,
 		Timestamp:  ir.Timestamp,
+		Status:     ir.Status,
 		Message:    ir.Message,
 		Level:      ir.Level,
 		Type:       ir.Type,
@@ -99,5 +143,40 @@ func (ir *issueRow) ToIssue() (Issue, error) {
 		IssueCount:      issueCount,
 		FirstStackTrace: firstStackTrace,
 		Age:             ir.Age,
+	}, nil
+}
+
+func (ir *issueDetailRow) ToIssueDetail() (IssueDetail, error) {
+	var stacktrace []Stacktrace
+	if err := json.Unmarshal(ir.Stacktrace, &stacktrace); err != nil {
+		return IssueDetail{}, err
+	}
+
+	var assignee *Assignee = nil
+
+	if ir.AssigneeID != nil {
+		assignee = &Assignee{
+			ID:    *ir.AssigneeID,
+			Name:  ir.AssigneeName,
+			Email: ir.AssigneeEmail,
+		}
+	}
+
+	return IssueDetail{
+		ID:         ir.ID,
+		EventID:    ir.EventID,
+		EventCount: ir.EventCount,
+		Timestamp:  ir.Timestamp,
+		Status:     ir.Status,
+		Message:    ir.Message,
+		Level:      ir.Level,
+		Type:       ir.Type,
+		Assignee:   assignee,
+		Project: Project{
+			ID:   ir.ProjectID,
+			Name: ir.ProjectName,
+		},
+		Stacktrace: stacktrace,
+		Age:        ir.Age,
 	}, nil
 }

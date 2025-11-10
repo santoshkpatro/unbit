@@ -54,4 +54,5 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 		Cache: cache,
 	}
 	api.GET("/issues/recent", issueContext.RecentIssueListView)
+	api.GET("/issues/:issue_id", issueContext.IssueDetailsView)
 }
