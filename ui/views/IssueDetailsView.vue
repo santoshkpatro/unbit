@@ -3,7 +3,7 @@ import { onMounted, ref, computed, h, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { issueDetailsAPI } from '@/api/issues.js'
+import { issueDetailsAPI, previousEventsAPI } from '@/api/issues.js'
 
 // Ant icons — used ONLY on buttons
 import {
@@ -67,6 +67,7 @@ onMounted(async () => {
     loading.value = true
     const id = route.params.issueId
     issue.value = await issueDetailsAPI(id)
+    previousEvents.value = await previousEventsAPI(id)
   } catch (e) {
     error.value = e?.message || 'Failed to load issue'
   } finally {

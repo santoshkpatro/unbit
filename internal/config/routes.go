@@ -55,4 +55,5 @@ func RegisterRoutes(e *echo.Echo, db *sqlx.DB, cache *redis.Client) {
 	}
 	api.GET("/issues/recent", issueContext.RecentIssueListView)
 	api.GET("/issues/:issue_id", issueContext.IssueDetailsView)
+	api.GET("/issues/:issue_id/previous_events", issueContext.PreviousEventsView)
 }

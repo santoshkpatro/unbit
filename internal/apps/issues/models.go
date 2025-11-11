@@ -195,3 +195,12 @@ func (ir *issueDetailRow) ToIssueDetail() (IssueDetail, error) {
 		Host:       ir.Host,
 	}, nil
 }
+
+type eventRow struct {
+	ID        string    `db:"id" json:"id"`
+	Timestamp time.Time `db:"timestamp" json:"timestamp"`
+	Message   string    `db:"message" json:"message"`
+	Type      string    `db:"type" json:"type"`
+	Level     string    `db:"level" json:"level"`
+	CreatedAt time.Time `db:"created_at" json:"createdAt"`
+}

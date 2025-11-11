@@ -217,3 +217,43 @@ func (v *IssueContext) IssueDetailsView(c echo.Context) error {
 
 	return utils.RespondOK(c, issue, "")
 }
+
+func (v *IssueContext) PreviousEventsView(c echo.Context) error {
+	userID, _ := utils.CheckAuthentication(c)
+	issueID := c.Param("issue_id")
+	limit := 5
+
+	query := `
+		SELECT
+			e.id,
+			e.timestamp,
+			e.properties ->> 'message' AS message,
+			e.properties ->> 'type' AS type,
+			e.properties ->> 'level' AS level,
+			e.created_at
+		FROM
+			events e
+		WHERE
+			e.issue_id = $1
+			AND e.event_type = 'issues' AND
+			e.project_id IN (
+				SELECT
+					project_id
+				FROM
+					project_members
+				WHERE
+					user_id = $2
+			)
+		ORDER BY
+			e.timestamp DESC
+		LIMIT $3
+	`
+	var rows []eventRow
+	err := v.DB.Select(&rows, query, issueID, userID, limit)
+	if err != nil {
+		fmt.Println("err", err)
+		return utils.RespondFail(c, 500, "Failed to fetch previous events", err)
+	}
+
+	return utils.RespondOK(c, rows, "")
+}

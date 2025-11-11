@@ -6,3 +6,8 @@ export const recentIssuesAPI = (filters) =>
   })
 
 export const issueDetailsAPI = (issueId) => apiClient.get(`/issues/${issueId}`)
+
+export const previousEventsAPI = (issueId, params) =>
+  apiClient.get(`/issues/${issueId}/previous_events`, {
+    params,
+  })
