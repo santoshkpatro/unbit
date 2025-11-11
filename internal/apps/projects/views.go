@@ -43,7 +43,7 @@ func (v *ProjectContext) ProjectCreateView(c echo.Context) error {
 	_, err = v.DB.Exec(`
 		INSERT INTO project_members (id, project_id, user_id, role)
 		VALUES ($1, $2, $3, 'owner')
-	`, utils.GenerateID("prm_"), newProjectId, userID)
+	`, utils.GenerateID("prm"), newProjectId, userID)
 	if err != nil {
 		return utils.RespondFail(c, http.StatusInternalServerError, "Failed to add project member", err)
 	}
