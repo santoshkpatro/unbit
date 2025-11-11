@@ -26,18 +26,94 @@ const route = useRoute()
 const { loggedInUser } = storeToRefs(useAuthStore())
 const { setting } = storeToRefs(useSettingStore())
 
-// no collapsed state at all now
-const selectedKeys = ref([route.path])
-const openKeys = ref([])
+// --- menu configuration ---
+// Keep a flat list of menu keys and a parent map for submenu children
+const MENU_KEYS = [
+  '/',
+  '/issues',
+  '/projects',
+  '/settings',
+  '/docs',
+  '/support',
+  '/security',
+  '/access-control',
+  '/audit-logs',
+  '/compliance',
+  '/organizations',
+  '/system',
+  '/system-status',
+  '/integrations',
+  '/webhooks',
+]
+
+const PARENT_FOR = {
+  '/access-control': '/security',
+  '/audit-logs': '/security',
+  '/compliance': '/security',
+  '/organizations': '/security',
+  '/system-status': '/system',
+  '/integrations': '/system',
+  '/webhooks': '/system',
+}
 
 const GITHUB_STAR_URL = 'https://github.com/santoshkpatro/unbit'
 const DEMO_URL = 'https://demo.unbit.com'
 
+// Normalization helpers
+const normalizePath = (p = '') => {
+  if (!p) return '/'
+  // remove trailing slashes (but keep root)
+  const out = p.replace(/\/+$|\s+/g, '')
+  return out === '' ? '/' : out.replace(/\/+$/g, '')
+}
+
+// choose the best menu key that matches the current route path
+const findBestMenuKey = (currentPath) => {
+  const path = normalizePath(currentPath)
+  // exact root
+  if (path === '/') return '/'
+  // choose the longest MENU_KEYS entry that is a prefix of path
+  let best = null
+  for (const key of MENU_KEYS) {
+    if (key === '/') continue
+    if (path === key) return key
+    if (path.startsWith(key + '/')) {
+      if (!best || key.length > best.length) best = key
+    }
+  }
+  // fallback to direct startsWith (covers when menu key equals prefix)
+  if (best) return best
+  // if none matched, try exact equality for non-root keys
+  if (MENU_KEYS.includes(path)) return path
+  // unknown path -> just return path so selectedKeys highlights nothing
+  return path
+}
+
+// reactive selection state
+const selectedKeys = ref([normalizePath(route.path)])
+const openKeys = ref([])
+
+// ensure selectedKeys and openKeys follow the route
 watchEffect(() => {
-  selectedKeys.value = [route.path]
+  const path = normalizePath(route.path)
+  const best = findBestMenuKey(path)
+  selectedKeys.value = [best]
+
+  // open parent submenu if best has a parent
+  const parent = PARENT_FOR[best]
+  if (parent) openKeys.value = [parent]
+  else {
+    // if a top-level submenu key itself (e.g. '/security' or '/system') open it
+    if (best === '/security' || best === '/system') openKeys.value = [best]
+    else openKeys.value = []
+  }
 })
 
+// menu click handler
 const onMenuClick = ({ key }) => {
+  if (!key) return
+
+  // special external actions
   if (key === '__github_star') {
     window.open(GITHUB_STAR_URL, '_blank', 'noopener,noreferrer')
     return
@@ -46,14 +122,33 @@ const onMenuClick = ({ key }) => {
     window.open(DEMO_URL, '_blank', 'noopener,noreferrer')
     return
   }
-  if (key && key !== route.path) router.push(key)
+
+  const target = String(key)
+  // if it's a full URL, open external
+  if (/^https?:\/\//.test(target)) {
+    window.open(target, '_blank', 'noopener,noreferrer')
+    return
+  }
+
+  // avoid pushing identical route
+  const normalized = normalizePath(target)
+  if (normalized !== normalizePath(route.path)) router.push(normalized)
 }
 
+// computed initials
 const initials = computed(() => {
   const parts = (loggedInUser.value.firstName || '').trim().split(/\s+/)
   const chars = (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
   return chars.toUpperCase() || 'U'
 })
+
+// keyboard activation for brand (Enter / Space)
+const onBrandKey = (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    router.push('/')
+  }
+}
 </script>
 
 <template>
@@ -62,7 +157,13 @@ const initials = computed(() => {
     <a-layout-sider class="app-sider" width="216" theme="light" :collapsed="false" :trigger="null">
       <!-- Sider header (brand NO collapse button) -->
       <div class="sider-header">
-        <div class="brand" @click="router.push('/')" role="button" tabindex="0">
+        <div
+          class="brand"
+          @click="router.push('/')"
+          role="button"
+          tabindex="0"
+          @keydown="onBrandKey"
+        >
           <img class="logo" alt="Logo" />
           <span class="title">{{ setting.org.siteName }}</span>
         </div>

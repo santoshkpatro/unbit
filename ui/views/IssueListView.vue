@@ -244,7 +244,7 @@ const handleMute = () =>
                 placeholder="All projects"
                 allow-clear
               >
-                <a-select-option :value="null">All projects</a-select-option>
+                <a-select-option :value="null">My projects</a-select-option>
                 <a-select-option v-for="p in projects" :key="p.id" :value="p.id">
                   {{ p.name }}
                 </a-select-option>
